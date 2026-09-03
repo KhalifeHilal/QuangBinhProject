@@ -1,0 +1,77 @@
+#pragma kernel Initialize
+#pragma kernel AddWater
+#pragma kernel ComputeFlux
+#pragma kernel ApplyFlux
+
+RWTexture2D<float4> StateMap;
+RWTexture2D<float4> FluxMap;
+Texture2D<float> ObstacleMap;
+uint _Width, _Height;
+float _DeltaTime, _Gravity, _PipeArea, _PipeLength, _CellArea, _RainRate, _Evaporation, _MaximumWater;
+
+uint2 ClampCell(int2 p) { return (uint2)clamp(p, int2(0,0), int2((int)_Width-1,(int)_Height-1)); }
+float FullHeight(int2 p) { float4 s = StateMap[ClampCell(p)]; return s.r + s.g; }
+bool IsBlocked(int2 p) { return ObstacleMap[ClampCell(p)] > 0.5; }
+
+[numthreads(8,8,1)]
+void Initialize(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= _Width || id.y >= _Height) return;
+    if (IsBlocked(id.xy)) { StateMap[id.xy] = float4(0.16, 0, 0, 1); FluxMap[id.xy] = 0; return; }
+    float2 uv = (id.xy + 0.5) / float2(_Width, _Height);
+    // The left side is slightly higher: water travels downhill towards +X.
+    float terrain = 0.025 * (1.0 - uv.x);
+    // A reservoir occupies only the world-left edge. Scene colliders define all barriers.
+    float water = uv.x < 0.16 ? 0.34 * smoothstep(0.16, 0.025, uv.x) : 0.0;
+    StateMap[id.xy] = float4(terrain, water, 0, 1);
+    FluxMap[id.xy] = 0;
+}
+
+[numthreads(8,8,1)]
+void AddWater(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= _Width || id.y >= _Height) return;
+    if (IsBlocked(id.xy)) { float4 blockedState = StateMap[id.xy]; blockedState.g = 0; StateMap[id.xy] = blockedState; return; }
+    float4 state = StateMap[id.xy];
+    state.g = clamp(state.g + _RainRate * _DeltaTime, 0, _MaximumWater);
+    StateMap[id.xy] = state;
+}
+
+[numthreads(8,8,1)]
+void ComputeFlux(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= _Width || id.y >= _Height) return;
+    if (IsBlocked(id.xy)) { FluxMap[id.xy] = 0; return; }
+    int2 p = int2(id.xy);
+    float4 state = StateMap[id.xy];
+    float total = state.r + state.g;
+    float4 difference = total - float4(FullHeight(p+int2(-1,0)), FullHeight(p+int2(1,0)),
+                                      FullHeight(p+int2(0,1)), FullHeight(p+int2(0,-1)));
+    float4 flux = max(0, FluxMap[id.xy] + _DeltaTime * _Gravity * _PipeArea * difference / _PipeLength);
+    float sumFlux = flux.x + flux.y + flux.z + flux.w;
+    if (sumFlux > 0) flux *= min(1.0, state.g * _CellArea / (sumFlux * _DeltaTime));
+    if (id.x == 0) flux.x = 0;
+    if (id.x == _Width-1) flux.y = 0;
+    if (id.y == _Height-1) flux.z = 0;
+    if (id.y == 0) flux.w = 0;
+    if (IsBlocked(p+int2(-1,0))) flux.x = 0;
+    if (IsBlocked(p+int2(1,0))) flux.y = 0;
+    if (IsBlocked(p+int2(0,1))) flux.z = 0;
+    if (IsBlocked(p+int2(0,-1))) flux.w = 0;
+    FluxMap[id.xy] = flux;
+}
+
+[numthreads(8,8,1)]
+void ApplyFlux(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= _Width || id.y >= _Height) return;
+    if (IsBlocked(id.xy)) { float4 blockedState = StateMap[id.xy]; blockedState.g = 0; StateMap[id.xy] = blockedState; return; }
+    int2 p = int2(id.xy);
+    float4 outgoing = FluxMap[id.xy];
+    float incoming = FluxMap[ClampCell(p+int2(-1,0))].y + FluxMap[ClampCell(p+int2(1,0))].x
+                   + FluxMap[ClampCell(p+int2(0,1))].w + FluxMap[ClampCell(p+int2(0,-1))].z;
+    float4 state = StateMap[id.xy];
+    state.g = clamp((state.g + _DeltaTime * (incoming-outgoing.x-outgoing.y-outgoing.z-outgoing.w) / _CellArea)
+                     * (1.0 - _Evaporation * _DeltaTime), 0, _MaximumWater);
+    StateMap[id.xy] = state;
+}
