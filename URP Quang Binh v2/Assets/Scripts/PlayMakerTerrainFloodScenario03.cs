@@ -7,12 +7,17 @@ public sealed class PlayMakerTerrainFloodScenario03 : MonoBehaviour
 {
     [SerializeField] GameObject floodPrefab;
     [SerializeField] float duration = 25f;
+    [SerializeField] float pathwayViewingDuration = 15f;
     PlayMakerFSM tutorial;
     InputAction questA;
     GameObject activeScenario;
     TerrainFloodSimulation simulation;
     float elapsed;
-    bool ready;
+    GameObject continuePrompt;
+    int selectedAnswer = -1;
+    Phase phase;
+
+    enum Phase { WaitingForTutorial, WaitingForA, Running, Question, BuildingDykes, InterventionRunning, Confidence }
 
     void Awake()
     {
@@ -24,26 +29,37 @@ public sealed class PlayMakerTerrainFloodScenario03 : MonoBehaviour
 
     void Update()
     {
-        if (!ready && tutorial != null && tutorial.Fsm.ActiveStateName == "Etat 12")
+        if (phase == Phase.WaitingForTutorial && tutorial != null && tutorial.Fsm.ActiveStateName == "Etat 12")
         {
             Hide("StartGame"); Hide("TutorialAnimation_01"); Hide("TutorialAnimation_02");
-            ready = true;
-            Debug.Log("Flood scenario 03 ready. Press the right Quest A button.");
+            ClearDykeManagerChildren();
+            continuePrompt = FloodScenarioContinuePrompt.Show();
+            phase = Phase.WaitingForA;
+            Debug.Log("A1-P1 ready. Press the right Quest A button to continue.");
         }
-        if (ready && activeScenario == null && questA.WasPressedThisFrame()) StartScenario();
-        if (activeScenario == null) return;
+        if (phase == Phase.WaitingForA && questA.WasPressedThisFrame()) StartPathwayPreview();
+        if (phase == Phase.BuildingDykes && questA.WasPressedThisFrame()) StartInterventionSimulation();
+        if ((phase != Phase.Running && phase != Phase.InterventionRunning) || activeScenario == null) return;
         elapsed += Time.deltaTime;
-        if (elapsed >= duration) StopScenario();
+        float currentDuration = phase == Phase.Running ? pathwayViewingDuration : duration;
+        if (elapsed >= currentDuration)
+        {
+            if (phase == Phase.InterventionRunning) StopInterventionSimulation();
+            else StopScenario();
+        }
     }
 
-    void StartScenario()
+    void StartPathwayPreview()
     {
-        if (floodPrefab == null) { Debug.LogError("Flood scenario prefab is missing.", this); return; }
+        SetDykeConstruction(false, true);
         Transform parent = Find("FakeFloodEnvironment")?.transform;
-        activeScenario = Instantiate(floodPrefab, parent, false);
-        simulation = activeScenario.GetComponent<TerrainFloodSimulation>();
-        simulation.Begin();
+        if (continuePrompt != null) Destroy(continuePrompt);
+        activeScenario = new GameObject("Scenario_A1_P1_PathwayPreview");
+        activeScenario.transform.SetParent(parent, false);
+        activeScenario.AddComponent<FloodPathwayScenarioA1P1>();
+        simulation = null;
         elapsed = 0;
+        phase = Phase.Running;
     }
 
     void StopScenario()
@@ -51,6 +67,82 @@ public sealed class PlayMakerTerrainFloodScenario03 : MonoBehaviour
         simulation?.StopSimulation();
         if (activeScenario != null) Destroy(activeScenario);
         activeScenario = null;
+        ClearDykeManagerChildren();
+        phase = Phase.Question;
+        FloodScenarioQuizPanel.Show(RepeatScenario, BeginDykeBuilding);
+    }
+
+    void RepeatScenario()
+    {
+        if (phase != Phase.Question) return;
+        StartPathwayPreview();
+    }
+
+    void BeginDykeBuilding(int answer)
+    {
+        selectedAnswer = answer;
+        SetDykeConstruction(true, false);
+        continuePrompt = FloodScenarioContinuePrompt.ShowDykeBuilding();
+        phase = Phase.BuildingDykes;
+    }
+
+    void StartInterventionSimulation()
+    {
+        if (floodPrefab == null) { Debug.LogError("Flood scenario prefab is missing.", this); return; }
+        if (continuePrompt != null) Destroy(continuePrompt);
+        SetDykeConstruction(false, false);
+        Transform parent = Find("FakeFloodEnvironment")?.transform;
+        activeScenario = Instantiate(floodPrefab, parent, false);
+        activeScenario.name = "Scenario_A1_P1_WithParticipantDykes";
+        activeScenario.AddComponent<FloodPathwayScenarioA1P1>();
+        simulation = activeScenario.GetComponent<TerrainFloodSimulation>();
+        if (simulation == null) { Debug.LogError("TerrainFloodSimulation is missing on the flood prefab.", this); return; }
+        simulation.Begin();
+        elapsed = 0;
+        phase = Phase.InterventionRunning;
+    }
+
+    void StopInterventionSimulation()
+    {
+        simulation?.StopSimulation();
+        if (activeScenario != null) Destroy(activeScenario);
+        activeScenario = null;
+        ClearDykeManagerChildren();
+        phase = Phase.Confidence;
+        FloodScenarioQuizPanel.ShowConfidence(selectedAnswer);
+    }
+
+    static void SetDykeConstruction(bool enabled, bool hideOldDykes)
+    {
+        DykeManagerTutorial manager = Object.FindFirstObjectByType<DykeManagerTutorial>(FindObjectsInactive.Include);
+        if (manager != null)
+        {
+            manager.gameObject.SetActive(true);
+            manager.enabled = enabled;
+            manager.freePlacement = enabled;
+        }
+        foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+        {
+            Transform[] objects = root.GetComponentsInChildren<Transform>(true);
+            foreach (Transform item in objects)
+            {
+                string lowerName = item.name.ToLowerInvariant();
+                // Snap points belong only to the original tutorial. A1-P1 uses free placement.
+                if (lowerName.Contains("snapping_point")) item.gameObject.SetActive(false);
+                if (hideOldDykes && (lowerName.StartsWith("dikeblock") || lowerName.StartsWith("sm_tempdyke")))
+                    Destroy(item.gameObject);
+            }
+        }
+    }
+
+    static void ClearDykeManagerChildren()
+    {
+        DykeManagerTutorial manager = Object.FindFirstObjectByType<DykeManagerTutorial>(FindObjectsInactive.Include);
+        if (manager == null) return;
+        manager.enabled = false;
+        manager.freePlacement = false;
+        for (int i = manager.transform.childCount - 1; i >= 0; i--)
+            Destroy(manager.transform.GetChild(i).gameObject);
     }
 
     static void Hide(string objectName) { GameObject found = Find(objectName); if (found != null) found.SetActive(false); }
@@ -62,5 +154,9 @@ public sealed class PlayMakerTerrainFloodScenario03 : MonoBehaviour
         return null;
     }
 
-    void OnDestroy() { questA?.Disable(); questA?.Dispose(); }
+    void OnDestroy()
+    {
+        questA?.Disable(); questA?.Dispose();
+        if (continuePrompt != null) Destroy(continuePrompt);
+    }
 }

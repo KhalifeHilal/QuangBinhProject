@@ -6,8 +6,11 @@
 RWTexture2D<float4> StateMap;
 RWTexture2D<float4> FluxMap;
 Texture2D<float> ObstacleMap;
+Texture2D<float> RiverMask;
 uint _Width, _Height;
 float _DeltaTime, _Gravity, _PipeArea, _PipeLength, _CellArea, _RainRate, _Evaporation, _MaximumWater;
+float _RiverCenter, _RiverHalfWidth, _RiverDepth, _RiverInflow;
+int _VisibleLeftStartReservoir;
 
 uint2 ClampCell(int2 p) { return (uint2)clamp(p, int2(0,0), int2((int)_Width-1,(int)_Height-1)); }
 float FullHeight(int2 p) { float4 s = StateMap[ClampCell(p)]; return s.r + s.g; }
@@ -19,10 +22,14 @@ void Initialize(uint3 id : SV_DispatchThreadID)
     if (id.x >= _Width || id.y >= _Height) return;
     if (IsBlocked(id.xy)) { StateMap[id.xy] = float4(0.16, 0, 0, 1); FluxMap[id.xy] = 0; return; }
     float2 uv = (id.xy + 0.5) / float2(_Width, _Height);
-    // The left side is slightly higher: water travels downhill towards +X.
-    float terrain = 0.025 * (1.0 - uv.x);
-    // A reservoir occupies only the world-left edge. Scene colliders define all barriers.
-    float water = uv.x < 0.16 ? 0.34 * smoothstep(0.16, 0.025, uv.x) : 0.0;
+    float inRiver = RiverMask[id.xy];
+    // A deeper channel follows the visible river. It fills first and only starts
+    // overtopping its banks after the river level has risen sufficiently.
+    float terrain = 0.025 * (1.0 - uv.x) - _RiverDepth * inRiver;
+    // The isolated debugging scene can begin with a clearly visible reservoir,
+    // still restricted to the real river and the left side only.
+    float visibleLeftReservoir = 1.0 - smoothstep(0.04, 0.14, uv.x);
+    float water = _VisibleLeftStartReservoir != 0 ? 0.18 * inRiver * visibleLeftReservoir : 0.0;
     StateMap[id.xy] = float4(terrain, water, 0, 1);
     FluxMap[id.xy] = 0;
 }
@@ -33,7 +40,17 @@ void AddWater(uint3 id : SV_DispatchThreadID)
     if (id.x >= _Width || id.y >= _Height) return;
     if (IsBlocked(id.xy)) { float4 blockedState = StateMap[id.xy]; blockedState.g = 0; StateMap[id.xy] = blockedState; return; }
     float4 state = StateMap[id.xy];
-    state.g = clamp(state.g + _RainRate * _DeltaTime, 0, _MaximumWater);
+    float2 uv = (id.xy + 0.5) / float2(_Width, _Height);
+    float riverMask = RiverMask[id.xy];
+    // Feed only the left entrance of the real river mask. The low initial river
+    // remains visible, then the flood wave travels through it towards +X.
+    // A narrow inlet at the extreme left creates a visible travelling wave.
+    // Water is not spawned uniformly over the river surface.
+    float narrowInlet = 1.0 - smoothstep(0.005, 0.025, uv.x);
+    float visibleInlet = 1.0 - smoothstep(0.025, 0.08, uv.x);
+    float leftInlet = _VisibleLeftStartReservoir != 0 ? visibleInlet : narrowInlet;
+    float source = _RainRate + _RiverInflow * riverMask * leftInlet;
+    state.g = clamp(state.g + source * _DeltaTime, 0, _MaximumWater);
     StateMap[id.xy] = state;
 }
 
@@ -48,6 +65,10 @@ void ComputeFlux(uint3 id : SV_DispatchThreadID)
     float4 difference = total - float4(FullHeight(p+int2(-1,0)), FullHeight(p+int2(1,0)),
                                       FullHeight(p+int2(0,1)), FullHeight(p+int2(0,-1)));
     float4 flux = max(0, FluxMap[id.xy] + _DeltaTime * _Gravity * _PipeArea * difference / _PipeLength);
+    // Scenario flow is one-way: water may travel only from world-left towards +X.
+    // Suppressing the -X channel prevents pressure reflections from looking like
+    // a second flood source entering from the right side.
+    flux.x = 0;
     float sumFlux = flux.x + flux.y + flux.z + flux.w;
     if (sumFlux > 0) flux *= min(1.0, state.g * _CellArea / (sumFlux * _DeltaTime));
     if (id.x == 0) flux.x = 0;
@@ -73,5 +94,8 @@ void ApplyFlux(uint3 id : SV_DispatchThreadID)
     float4 state = StateMap[id.xy];
     state.g = clamp((state.g + _DeltaTime * (incoming-outgoing.x-outgoing.y-outgoing.z-outgoing.w) / _CellArea)
                      * (1.0 - _Evaporation * _DeltaTime), 0, _MaximumWater);
+    // Open downstream boundary: water reaching the right outlet leaves the map
+    // instead of pooling there and appearing to flood back in from the right.
+    if (id.x >= _Width - 2) state.g = 0;
     StateMap[id.xy] = state;
 }

@@ -22,6 +22,9 @@ public class DykeManagerTutorial : MonoBehaviour
     [SerializeField] float scaleMultiplier = 0.1f;
     [SerializeField] GameObject dykeToDestroy;
 
+    [Header("Scenario placement")]
+    public bool freePlacement;
+
     [Header("For PlayMaker")]
     public int dykeBuilt = 0;
     public int dykeDestroyed = 0;
@@ -33,6 +36,25 @@ public class DykeManagerTutorial : MonoBehaviour
     PropertiesGAMA propFutureDike;
     PolygonGenerator polyGen = null;
     Dictionary<GameObject, Material> selectedHoveringDykes;
+    InputAction scenarioGrip;
+    Transform placementTerrain;
+    Renderer placementTerrainRenderer;
+    GameObject placementMarker;
+    A1P1ScenarioDyke hoveredScenarioDyke;
+
+    void Awake()
+    {
+        scenarioGrip = new InputAction("Destroy A1-P1 Dyke", InputActionType.Button,
+            "<XRController>{RightHand}/gripPressed");
+    }
+
+    void OnEnable() => scenarioGrip?.Enable();
+    void OnDisable()
+    {
+        scenarioGrip?.Disable();
+        SetHoveredScenarioDyke(null);
+        if (placementMarker != null) { Destroy(placementMarker); placementMarker = null; }
+    }
 
     void Start()
     {
@@ -55,11 +77,108 @@ public class DykeManagerTutorial : MonoBehaviour
 
     void Update()
     {
+        UpdatePlacementMarker();
+        UpdateScenarioDykeHover();
+        ProcessFreePlacementGrip();
         ProcessRightHandTrigger();
 
         if (displayFutureDike)
         {
             GenerateFutureDike();
+        }
+    }
+
+    void UpdateScenarioDykeHover()
+    {
+        A1P1ScenarioDyke next = freePlacement ? FindScenarioDykeUnderRay() : null;
+        SetHoveredScenarioDyke(next);
+    }
+
+    A1P1ScenarioDyke FindScenarioDykeUnderRay()
+    {
+        if (rightXRRayInteractor == null || rightXRRayInteractor.rayOriginTransform == null) return null;
+        Transform origin = rightXRRayInteractor.rayOriginTransform;
+        RaycastHit[] hits = Physics.RaycastAll(origin.position, origin.forward, 100f, ~0, QueryTriggerInteraction.Collide);
+        A1P1ScenarioDyke closestDyke = null;
+        float closestDistance = float.MaxValue;
+        foreach (RaycastHit hit in hits)
+        {
+            A1P1ScenarioDyke dyke = hit.collider.GetComponentInParent<A1P1ScenarioDyke>();
+            if (dyke != null && hit.distance < closestDistance) { closestDyke = dyke; closestDistance = hit.distance; }
+        }
+        return closestDyke;
+    }
+
+    void SetHoveredScenarioDyke(A1P1ScenarioDyke next)
+    {
+        if (hoveredScenarioDyke == next) return;
+        if (hoveredScenarioDyke != null) hoveredScenarioDyke.SetHovered(false);
+        hoveredScenarioDyke = next;
+        if (hoveredScenarioDyke != null) hoveredScenarioDyke.SetHovered(true, selectedMaterial);
+    }
+
+    void UpdatePlacementMarker()
+    {
+        if (!freePlacement || !rightXRRayInteractor.TryGetCurrent3DRaycastHit(out RaycastHit hit) || !IsTerrainHit(hit))
+        {
+            if (placementMarker != null) placementMarker.SetActive(false);
+            return;
+        }
+
+        if (placementMarker == null)
+        {
+            placementMarker = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            placementMarker.name = "A1P1_Dyke_Placement_Point";
+            placementMarker.transform.localScale = Vector3.one * .12f;
+            Collider markerCollider = placementMarker.GetComponent<Collider>();
+            if (markerCollider != null) markerCollider.enabled = false;
+            Renderer markerRenderer = placementMarker.GetComponent<Renderer>();
+            Shader shader = Shader.Find("Universal Render Pipeline/Unlit");
+            if (shader == null) shader = Shader.Find("Sprites/Default");
+            markerRenderer.material = new Material(shader) { color = new Color(.05f, 1f, .25f, 1f) };
+        }
+
+        placementMarker.SetActive(true);
+        placementMarker.transform.position = hit.point + hit.normal * .025f;
+    }
+
+    bool IsTerrainHit(RaycastHit hit)
+    {
+        if (placementTerrain == null)
+        {
+            foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+            foreach (Transform child in root.GetComponentsInChildren<Transform>(true))
+                if (child.name == "SM_Tutorial_Terrain_01")
+                {
+                    placementTerrain = child;
+                    placementTerrainRenderer = child.GetComponentInChildren<Renderer>(true);
+                    break;
+                }
+        }
+        if (placementTerrain == null || hit.collider == null) return false;
+        Transform hitTransform = hit.collider.transform;
+        if (hitTransform == placementTerrain || hitTransform.IsChildOf(placementTerrain) || placementTerrain.IsChildOf(hitTransform))
+            return true;
+
+        // Some imported map prefabs keep the ground collider outside the visible
+        // SM_Tutorial_Terrain_01 hierarchy. Accept only hits inside the map footprint
+        // and close to its ground surface, never elevated building hits.
+        if (placementTerrainRenderer == null) return false;
+        Bounds bounds = placementTerrainRenderer.bounds;
+        float heightTolerance = Mathf.Max(.15f, bounds.size.y * .2f);
+        return hit.point.x >= bounds.min.x && hit.point.x <= bounds.max.x &&
+               hit.point.z >= bounds.min.z && hit.point.z <= bounds.max.z &&
+               hit.point.y <= bounds.max.y + heightTolerance && hit.normal.y > .35f;
+    }
+
+    void ProcessFreePlacementGrip()
+    {
+        if (!freePlacement || scenarioGrip == null || !scenarioGrip.WasPressedThisFrame()) return;
+        A1P1ScenarioDyke scenarioDyke = FindScenarioDykeUnderRay();
+        if (scenarioDyke != null)
+        {
+            SetHoveredScenarioDyke(null);
+            Destroy(scenarioDyke.gameObject);
         }
     }
 
@@ -72,10 +191,10 @@ public class DykeManagerTutorial : MonoBehaviour
                 inTriggerPress = true;
                 if (rightXRRayInteractor.TryGetCurrent3DRaycastHit(out RaycastHit raycastHit))
                 {
-                    if (snapPoints.Contains(raycastHit.collider))
+                    if ((freePlacement && IsTerrainHit(raycastHit)) || (!freePlacement && snapPoints.Contains(raycastHit.collider)))
                     {
                         startCollider = raycastHit.collider;
-                        startPoint = startCollider.transform.position;
+                        startPoint = freePlacement ? raycastHit.point : startCollider.transform.position;
                         displayFutureDike = true;
                     }
                 }
@@ -96,10 +215,12 @@ public class DykeManagerTutorial : MonoBehaviour
                 inTriggerPress = false;
                 if (rightXRRayInteractor.TryGetCurrent3DRaycastHit(out RaycastHit raycastHit))
                 {
-                    if (snapPoints.Contains(raycastHit.collider) && raycastHit.collider != startCollider)
+                    bool validEndPoint = (freePlacement && IsTerrainHit(raycastHit)) ||
+                        (!freePlacement && snapPoints.Contains(raycastHit.collider) && raycastHit.collider != startCollider);
+                    if (validEndPoint)
                     {
-                        endPoint = raycastHit.collider.transform.position;
-                        DrawNewDyke();
+                        endPoint = freePlacement ? raycastHit.point : raycastHit.collider.transform.position;
+                        if (Vector3.Distance(startPoint, endPoint) > 0.05f) DrawNewDyke();
                     }
                 }
             }
@@ -115,6 +236,11 @@ public class DykeManagerTutorial : MonoBehaviour
 
         if (rightXRRayInteractor.TryGetCurrent3DRaycastHit(out RaycastHit raycastHit))
         {
+            if (freePlacement && !IsTerrainHit(raycastHit))
+            {
+                if (futureDyke != null) { Destroy(futureDyke); futureDyke = null; }
+                return;
+            }
             if (futureDyke != null)
             {
                 DestroyImmediate(futureDyke);
@@ -150,9 +276,33 @@ public class DykeManagerTutorial : MonoBehaviour
         float distance = Vector3.Distance(startPoint, endPoint);
         dyke.transform.localScale = new Vector3(dyke.transform.localScale.x * scaleMultiplier, dyke.transform.localScale.y * scaleMultiplier, distance / 36);
 
+        if (freePlacement)
+        {
+            AddMeshColliders(dyke);
+            dyke.AddComponent<A1P1ScenarioDyke>();
+        }
+
         // AddInteraction(dyke);
 
         dykeBuilt++;
+    }
+
+    static void AddMeshColliders(GameObject dyke)
+    {
+        Collider[] existingColliders = dyke.GetComponentsInChildren<Collider>(true);
+        foreach (Collider existing in existingColliders)
+            if (!(existing is MeshCollider)) Destroy(existing);
+
+        MeshFilter[] meshFilters = dyke.GetComponentsInChildren<MeshFilter>(true);
+        foreach (MeshFilter filter in meshFilters)
+        {
+            if (filter.sharedMesh == null) continue;
+            MeshCollider collider = filter.GetComponent<MeshCollider>();
+            if (collider == null) collider = filter.gameObject.AddComponent<MeshCollider>();
+            collider.sharedMesh = filter.sharedMesh;
+            collider.convex = true;
+            collider.isTrigger = true;
+        }
     }
 
     void AddInteraction(GameObject dyke)
@@ -209,5 +359,11 @@ public class DykeManagerTutorial : MonoBehaviour
     public void OnTriggerActivate()
     {
         Debug.Log("Trigger Pressed");
+    }
+
+    void OnDestroy()
+    {
+        scenarioGrip?.Disable();
+        scenarioGrip?.Dispose();
     }
 }
