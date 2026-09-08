@@ -1306,9 +1306,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: "Use the right trigger button to interact with interface\n\nS\u1EED d\u1EE5ng
-    n\xFAt c\xF2 b\xEAn ph\u1EA3i \u0111\u1EC3 t\u01B0\u01A1ng t\xE1c v\u1EDBi giao
-    di\u1EC7n"
+  m_text: Use the right trigger button to interact with interface
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 0c8f81d105f60614fa350d31eaaf743f, type: 2}
   m_sharedMaterial: {fileID: 9074610766742511902, guid: 0c8f81d105f60614fa350d31eaaf743f, type: 2}
@@ -6018,6 +6016,64 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   localizationKey: tutorial.Text.DykingDestroying
+--- !u!1001 &472164072
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: 4642012085377728204, guid: 4e945e979e1484d208b01ff7e6ffc58d, type: 3}
+      propertyPath: m_Name
+      value: SM_Props_Advertisement_01
+      objectReference: {fileID: 0}
+    - target: {fileID: 5413447462871508086, guid: 4e945e979e1484d208b01ff7e6ffc58d, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 13.724779
+      objectReference: {fileID: 0}
+    - target: {fileID: 5413447462871508086, guid: 4e945e979e1484d208b01ff7e6ffc58d, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0.00000011920929
+      objectReference: {fileID: 0}
+    - target: {fileID: 5413447462871508086, guid: 4e945e979e1484d208b01ff7e6ffc58d, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 6.0809608
+      objectReference: {fileID: 0}
+    - target: {fileID: 5413447462871508086, guid: 4e945e979e1484d208b01ff7e6ffc58d, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 5413447462871508086, guid: 4e945e979e1484d208b01ff7e6ffc58d, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5413447462871508086, guid: 4e945e979e1484d208b01ff7e6ffc58d, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5413447462871508086, guid: 4e945e979e1484d208b01ff7e6ffc58d, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5413447462871508086, guid: 4e945e979e1484d208b01ff7e6ffc58d, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5413447462871508086, guid: 4e945e979e1484d208b01ff7e6ffc58d, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5413447462871508086, guid: 4e945e979e1484d208b01ff7e6ffc58d, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects:
+    - {fileID: 9154426663718759393, guid: 4e945e979e1484d208b01ff7e6ffc58d, type: 3}
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: 4e945e979e1484d208b01ff7e6ffc58d, type: 3}
 --- !u!1 &502067068
 GameObject:
   m_ObjectHideFlags: 0
@@ -7605,6 +7661,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Tieng Viet
       objectReference: {fileID: 0}
+    - target: {fileID: 5289182684458692540, guid: e5db301629853dd4a99835fa70099d79, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 5289182684458692541, guid: e5db301629853dd4a99835fa70099d79, type: 3}
       propertyPath: m_Pivot.x
       value: 0.5
@@ -7623,7 +7683,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 5289182684458692541, guid: e5db301629853dd4a99835fa70099d79, type: 3}
       propertyPath: m_AnchorMax.y
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 5289182684458692541, guid: e5db301629853dd4a99835fa70099d79, type: 3}
       propertyPath: m_AnchorMin.x
@@ -7631,7 +7691,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 5289182684458692541, guid: e5db301629853dd4a99835fa70099d79, type: 3}
       propertyPath: m_AnchorMin.y
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 5289182684458692541, guid: e5db301629853dd4a99835fa70099d79, type: 3}
       propertyPath: m_SizeDelta.x
@@ -7671,11 +7731,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 5289182684458692541, guid: e5db301629853dd4a99835fa70099d79, type: 3}
       propertyPath: m_AnchoredPosition.x
-      value: 0
+      value: 160.25
       objectReference: {fileID: 0}
     - target: {fileID: 5289182684458692541, guid: e5db301629853dd4a99835fa70099d79, type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: 0
+      value: -19.7
       objectReference: {fileID: 0}
     - target: {fileID: 5289182684458692541, guid: e5db301629853dd4a99835fa70099d79, type: 3}
       propertyPath: m_LocalEulerAnglesHint.x
@@ -9315,8 +9375,10 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: "Use the right Joystick to move\n\nS\u1EED d\u1EE5ng c\u1EA7n \u0111i\u1EC1u
-    khi\u1EC3n b\xEAn ph\u1EA3i \u0111\u1EC3 di chuy\u1EC3n"
+  m_text: 'Use the right Joystick to move
+
+
+'
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 0c8f81d105f60614fa350d31eaaf743f, type: 2}
   m_sharedMaterial: {fileID: 9074610766742511902, guid: 0c8f81d105f60614fa350d31eaaf743f, type: 2}
@@ -9420,7 +9482,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: English
+  m_text: Start
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 5d7466c3cc8eeb64f9d55ea7f045aee0, type: 2}
   m_sharedMaterial: {fileID: -2269715565744013307, guid: 5d7466c3cc8eeb64f9d55ea7f045aee0, type: 2}
@@ -11209,7 +11271,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Choose language
+  m_text: Let's start!
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 5d7466c3cc8eeb64f9d55ea7f045aee0, type: 2}
   m_sharedMaterial: {fileID: -2269715565744013307, guid: 5d7466c3cc8eeb64f9d55ea7f045aee0, type: 2}
@@ -12466,7 +12528,7 @@ RectTransform:
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 0, y: 0}
   m_AnchoredPosition: {x: 0, y: 1.25}
-  m_SizeDelta: {x: 235.29, y: 0}
+  m_SizeDelta: {x: 110, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!1001 &886982908315310031
 PrefabInstance:
@@ -25163,3 +25225,4 @@ SceneRoots:
   - {fileID: 2445856375707088863}
   - {fileID: 822365480}
   - {fileID: 1137810073}
+  - {fileID: 472164072}

@@ -41,8 +41,9 @@ public sealed class FloodPathwayScenarioA1P1 : MonoBehaviour
             new Vector3(right, y, centerZ - bounds.size.z * .04f)
         };
 
-        pathAMaterial = CreateMaterial(new Color(.02f, .45f, 1f, .95f));
-        pathBMaterial = CreateMaterial(new Color(.02f, .65f, 1f, .95f));
+        Color pathwayBlue = new Color(.02f, .58f, 1f, .95f);
+        pathAMaterial = CreateMaterial(pathwayBlue);
+        pathBMaterial = CreateMaterial(pathwayBlue);
         CreatePath("Path_A_Short_HighGround", pathA, pathAMaterial, bounds.size.x * .012f);
         CreatePath("Path_B_Long_LowCorridor", pathB, pathBMaterial, bounds.size.x * .014f);
         CreateLabel("Path \"A\"", pathA[1] + new Vector3(0, .32f, 0));

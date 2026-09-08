@@ -91,7 +91,7 @@ public sealed class FloodScenarioQuizPanel : MonoBehaviour
         TMP_Text correct = FloodLearningUI.Text("CorrectAnswer", feedbackGroup.transform, "Correct answer: B) Path B, because the continuous low-elevation corridor provides a more plausible flood pathway despite its greater length.", 31, FontStyles.Bold, -220, 135, TextAlignmentOptions.TopLeft, 70);
         correct.color = new Color(.4f, 1, .55f);
         FloodLearningUI.Text("ExplanationTitle", feedbackGroup.transform, "Explanation", 34, FontStyles.Bold, -395, 55, TextAlignmentOptions.Left, 70);
-        FloodLearningUI.Text("Explanation", feedbackGroup.transform, "Floodwater movement is strongly influenced by terrain connectivity and elevation. A longer but continuously low-lying corridor can provide a more plausible route than a shorter route that requires water to cross substantially higher terrain. Straight-line distance alone is therefore not sufficient for identifying the dominant flood pathway.", 29, FontStyles.Normal, -465, 260, TextAlignmentOptions.TopLeft, 70);
+        FloodLearningUI.Text("Explanation", feedbackGroup.transform, "Floodwater movement is strongly influenced by terrain connectivity and elevation. A longer but continuously low-lying corridor can provide a more plausible route than a shorter route that requires water to cross higher terrain. Straight-line distance alone is therefore not sufficient for identifying the dominant flood pathway.", 29, FontStyles.Normal, -465, 260, TextAlignmentOptions.TopLeft, 70);
     }
 
     void SelectAnswer(int index)
@@ -215,5 +215,76 @@ sealed class FloodScenarioContinuePrompt : MonoBehaviour
             "Build dykes for your answer anywhere on the terrain with the trigger.\nPoint at one and press Grip to destroy it. Press A when you are finished.",
             30, FontStyles.Bold, -135, 125, TextAlignmentOptions.Center, 55); prompt.color = new Color(.35f, .82f, 1);
         FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.1f); return root;
+    }
+}
+
+static class FloodScenarioOverlay
+{
+    public static GameObject ShowPathwayHint()
+    {
+        GameObject root = CreateCanvas("A1_P1_PathwayHint", new Vector2(720, 145), .0014f);
+        TMP_Text text = FloodLearningUI.Text("Text", root.transform, "Look at the pathways", 43,
+            FontStyles.Bold, -25, 90, TextAlignmentOptions.Center, 35);
+        text.color = Color.white;
+        FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.05f);
+        root.transform.position += Vector3.up * .25f;
+        return root;
+    }
+
+    public static GameObject ShowWaterDirectionArrow()
+    {
+        GameObject root = CreateCanvas("A1_P1_WaterDirection", new Vector2(760, 180), .0013f);
+        TMP_Text text = FloodLearningUI.Text("Arrow", root.transform, "WATER FROM LEFT   >>>", 46,
+            FontStyles.Bold, -25, 115, TextAlignmentOptions.Center, 25);
+        text.color = new Color(.2f, .75f, 1f);
+
+        Renderer terrain = FindRenderer("SM_Tutorial_Terrain_01");
+        Camera camera = Camera.main;
+        if (terrain != null)
+        {
+            Bounds bounds = terrain.bounds;
+            Renderer river = FindRenderer("SM_Tutorial_River_01");
+            float riverZ = river != null ? river.bounds.center.z : bounds.center.z;
+            root.transform.position = new Vector3(bounds.min.x - bounds.size.x * .08f,
+                bounds.max.y + .28f, riverZ);
+            if (camera != null)
+                root.transform.rotation = Quaternion.LookRotation(root.transform.position - camera.transform.position, Vector3.up);
+        }
+        else FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.05f);
+
+        root.AddComponent<PulsingFloodDirectionArrow>();
+        return root;
+    }
+
+    static GameObject CreateCanvas(string name, Vector2 size, float scale)
+    {
+        GameObject root = new GameObject(name, typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(Image));
+        root.GetComponent<Canvas>().renderMode = RenderMode.WorldSpace;
+        RectTransform rect = (RectTransform)root.transform;
+        rect.sizeDelta = size;
+        rect.localScale = Vector3.one * scale;
+        Image background = root.GetComponent<Image>();
+        background.color = new Color(0f, 0f, 0f, .82f);
+        background.raycastTarget = false;
+        return root;
+    }
+
+    static Renderer FindRenderer(string objectName)
+    {
+        foreach (GameObject root in UnityEngine.SceneManagement.SceneManager.GetActiveScene().GetRootGameObjects())
+        foreach (Transform child in root.GetComponentsInChildren<Transform>(true))
+            if (child.name == objectName) return child.GetComponentInChildren<Renderer>(true);
+        return null;
+    }
+}
+
+sealed class PulsingFloodDirectionArrow : MonoBehaviour
+{
+    Vector3 initialScale;
+    void Awake() => initialScale = transform.localScale;
+    void Update()
+    {
+        float pulse = 1f + .13f * Mathf.Sin(Time.time * 2.2f);
+        transform.localScale = initialScale * pulse;
     }
 }

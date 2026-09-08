@@ -14,6 +14,8 @@ public sealed class PlayMakerTerrainFloodScenario03 : MonoBehaviour
     TerrainFloodSimulation simulation;
     float elapsed;
     GameObject continuePrompt;
+    GameObject pathwayHint;
+    GameObject waterDirectionArrow;
     int selectedAnswer = -1;
     Phase phase;
 
@@ -59,6 +61,7 @@ public sealed class PlayMakerTerrainFloodScenario03 : MonoBehaviour
         activeScenario = new GameObject("Scenario_A1_P1_PathwayPreview");
         activeScenario.transform.SetParent(parent, false);
         activeScenario.AddComponent<FloodPathwayScenarioA1P1>();
+        pathwayHint = FloodScenarioOverlay.ShowPathwayHint();
         simulation = null;
         elapsed = 0;
         phase = Phase.Running;
@@ -68,6 +71,7 @@ public sealed class PlayMakerTerrainFloodScenario03 : MonoBehaviour
     {
         simulation?.StopSimulation();
         // The pathways remain visible behind the question.
+        if (pathwayHint != null) Destroy(pathwayHint);
         ClearDykeManagerChildren();
         phase = Phase.Question;
         FloodScenarioQuizPanel.Show(RepeatScenario, BeginDykeBuilding);
@@ -85,7 +89,9 @@ public sealed class PlayMakerTerrainFloodScenario03 : MonoBehaviour
         if (activeScenario != null) Destroy(activeScenario);
         activeScenario = null;
         SetDykeConstruction(true, false);
+        SetTutorialDykeBuildingGuide(false);
         continuePrompt = FloodScenarioContinuePrompt.ShowDykeBuilding();
+        waterDirectionArrow = FloodScenarioOverlay.ShowWaterDirectionArrow();
         phase = Phase.BuildingDykes;
     }
 
@@ -94,6 +100,8 @@ public sealed class PlayMakerTerrainFloodScenario03 : MonoBehaviour
         if (floodPrefab == null) { Debug.LogError("Flood scenario prefab is missing.", this); return; }
         HideA1P1Buildings();
         if (continuePrompt != null) Destroy(continuePrompt);
+        if (waterDirectionArrow != null) Destroy(waterDirectionArrow);
+        SetTutorialDykeBuildingGuide(false);
         SetDykeConstruction(false, false);
         Transform parent = Find("FakeFloodEnvironment")?.transform;
         activeScenario = Instantiate(floodPrefab, parent, false);
@@ -165,6 +173,20 @@ public sealed class PlayMakerTerrainFloodScenario03 : MonoBehaviour
         }
     }
 
+    static void SetTutorialDykeBuildingGuide(bool visible)
+    {
+        GameObject guide = Find("DykeBuilding Phase");
+        if (guide == null) return;
+        guide.SetActive(visible);
+        if (!visible) return;
+        foreach (Animator animator in guide.GetComponentsInChildren<Animator>(true))
+        {
+            animator.Rebind();
+            animator.Update(0f);
+            animator.enabled = true;
+        }
+    }
+
     static void Hide(string objectName) { GameObject found = Find(objectName); if (found != null) found.SetActive(false); }
     static GameObject Find(string objectName)
     {
@@ -178,5 +200,8 @@ public sealed class PlayMakerTerrainFloodScenario03 : MonoBehaviour
     {
         questA?.Disable(); questA?.Dispose();
         if (continuePrompt != null) Destroy(continuePrompt);
+        if (pathwayHint != null) Destroy(pathwayHint);
+        if (waterDirectionArrow != null) Destroy(waterDirectionArrow);
+        SetTutorialDykeBuildingGuide(false);
     }
 }
