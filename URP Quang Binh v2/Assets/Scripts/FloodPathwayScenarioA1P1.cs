@@ -1,6 +1,7 @@
 using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityEngine.UI;
 
 public sealed class FloodPathwayScenarioA1P1 : MonoBehaviour
 {
@@ -40,12 +41,12 @@ public sealed class FloodPathwayScenarioA1P1 : MonoBehaviour
             new Vector3(right, y, centerZ - bounds.size.z * .04f)
         };
 
-        pathAMaterial = CreateMaterial(new Color(1f, .34f, .08f, .95f));
+        pathAMaterial = CreateMaterial(new Color(.02f, .45f, 1f, .95f));
         pathBMaterial = CreateMaterial(new Color(.02f, .65f, 1f, .95f));
         CreatePath("Path_A_Short_HighGround", pathA, pathAMaterial, bounds.size.x * .012f);
         CreatePath("Path_B_Long_LowCorridor", pathB, pathBMaterial, bounds.size.x * .014f);
-        CreateLabel("Path A\nShort / higher ground", pathA[1] + new Vector3(0, .32f, 0), new Color(1f, .55f, .2f));
-        CreateLabel("Path B\nLonger / low corridor", pathB[2] + new Vector3(0, .28f, 0), new Color(.2f, .8f, 1f));
+        CreateLabel("Path \"A\"", pathA[1] + new Vector3(0, .32f, 0));
+        CreateLabel("Path \"B\"", pathB[2] + new Vector3(0, .28f, 0));
     }
 
     void CreatePath(string name, Vector3[] points, Material material, float width)
@@ -62,18 +63,21 @@ public sealed class FloodPathwayScenarioA1P1 : MonoBehaviour
         line.material = material;
     }
 
-    void CreateLabel(string textValue, Vector3 position, Color color)
+    void CreateLabel(string textValue, Vector3 position)
     {
-        GameObject canvasObject = new GameObject(textValue.StartsWith("Path A") ? "Path_A_Label" : "Path_B_Label", typeof(RectTransform), typeof(Canvas));
+        GameObject canvasObject = new GameObject(textValue.Contains("A") ? "Path_A_Label" : "Path_B_Label", typeof(RectTransform), typeof(Canvas), typeof(Image));
         canvasObject.transform.SetParent(modelRoot.transform, true);
         Canvas canvas = canvasObject.GetComponent<Canvas>();
         canvas.renderMode = RenderMode.WorldSpace;
         RectTransform rect = (RectTransform)canvasObject.transform;
-        rect.sizeDelta = new Vector2(480, 130);
+        rect.sizeDelta = new Vector2(300, 100);
         rect.localScale = Vector3.one * .0012f;
         rect.position = position;
         Camera camera = Camera.main;
         if (camera != null) rect.rotation = Quaternion.LookRotation(rect.position - camera.transform.position, Vector3.up);
+        Image background = canvasObject.GetComponent<Image>();
+        background.color = new Color(0f, 0f, 0f, .9f);
+        background.raycastTarget = false;
 
         GameObject labelObject = new GameObject("Text", typeof(RectTransform), typeof(TextMeshProUGUI));
         labelObject.transform.SetParent(canvasObject.transform, false);
@@ -85,7 +89,7 @@ public sealed class FloodPathwayScenarioA1P1 : MonoBehaviour
         label.fontSize = 36;
         label.fontStyle = FontStyles.Bold;
         label.alignment = TextAlignmentOptions.Center;
-        label.color = color;
+        label.color = Color.white;
         label.raycastTarget = false;
     }
 

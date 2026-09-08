@@ -51,9 +51,11 @@ public sealed class PlayMakerTerrainFloodScenario03 : MonoBehaviour
 
     void StartPathwayPreview()
     {
+        HideA1P1Buildings();
         SetDykeConstruction(false, true);
         Transform parent = Find("FakeFloodEnvironment")?.transform;
         if (continuePrompt != null) Destroy(continuePrompt);
+        if (activeScenario != null) Destroy(activeScenario);
         activeScenario = new GameObject("Scenario_A1_P1_PathwayPreview");
         activeScenario.transform.SetParent(parent, false);
         activeScenario.AddComponent<FloodPathwayScenarioA1P1>();
@@ -65,8 +67,7 @@ public sealed class PlayMakerTerrainFloodScenario03 : MonoBehaviour
     void StopScenario()
     {
         simulation?.StopSimulation();
-        if (activeScenario != null) Destroy(activeScenario);
-        activeScenario = null;
+        // The pathways remain visible behind the question.
         ClearDykeManagerChildren();
         phase = Phase.Question;
         FloodScenarioQuizPanel.Show(RepeatScenario, BeginDykeBuilding);
@@ -81,6 +82,8 @@ public sealed class PlayMakerTerrainFloodScenario03 : MonoBehaviour
     void BeginDykeBuilding(int answer)
     {
         selectedAnswer = answer;
+        if (activeScenario != null) Destroy(activeScenario);
+        activeScenario = null;
         SetDykeConstruction(true, false);
         continuePrompt = FloodScenarioContinuePrompt.ShowDykeBuilding();
         phase = Phase.BuildingDykes;
@@ -89,12 +92,12 @@ public sealed class PlayMakerTerrainFloodScenario03 : MonoBehaviour
     void StartInterventionSimulation()
     {
         if (floodPrefab == null) { Debug.LogError("Flood scenario prefab is missing.", this); return; }
+        HideA1P1Buildings();
         if (continuePrompt != null) Destroy(continuePrompt);
         SetDykeConstruction(false, false);
         Transform parent = Find("FakeFloodEnvironment")?.transform;
         activeScenario = Instantiate(floodPrefab, parent, false);
         activeScenario.name = "Scenario_A1_P1_WithParticipantDykes";
-        activeScenario.AddComponent<FloodPathwayScenarioA1P1>();
         simulation = activeScenario.GetComponent<TerrainFloodSimulation>();
         if (simulation == null) { Debug.LogError("TerrainFloodSimulation is missing on the flood prefab.", this); return; }
         simulation.Begin();
@@ -143,6 +146,23 @@ public sealed class PlayMakerTerrainFloodScenario03 : MonoBehaviour
         manager.freePlacement = false;
         for (int i = manager.transform.childCount - 1; i >= 0; i--)
             Destroy(manager.transform.GetChild(i).gameObject);
+    }
+
+    static void HideA1P1Buildings()
+    {
+        foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+        {
+            Transform[] objects = root.GetComponentsInChildren<Transform>(true);
+            foreach (Transform item in objects)
+            {
+                string lowerName = item.name.ToLowerInvariant();
+                if (lowerName.Contains("sm_building_big_001") ||
+                    lowerName.Contains("asm_building_big_001") ||
+                    lowerName.Contains("sm_buildung_03") ||
+                    lowerName.Contains("sm_building_03"))
+                    item.gameObject.SetActive(false);
+            }
+        }
     }
 
     static void Hide(string objectName) { GameObject found = Find(objectName); if (found != null) found.SetActive(false); }

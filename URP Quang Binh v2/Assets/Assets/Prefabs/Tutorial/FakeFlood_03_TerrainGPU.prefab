@@ -54,7 +54,7 @@ MonoBehaviour:
   timeScale: 0.12
   rainRate: 0
   evaporation: 0.004
-  maximumWater: 0.42
+  maximumWater: 0.8
   renderSimulationTerrain: 0
   fitToReferenceTerrain: 1
   referenceTerrainName: SM_Tutorial_Terrain_01
@@ -67,7 +67,8 @@ MonoBehaviour:
   obstacleRefreshInterval: 0.75
   referenceRiverName: SM_Tutorial_River_01
   riverHalfWidth: 0.09
-  riverDepth: 0.1
-  riverInflow: 0.9
+  riverDepth: 0.035
+  riverInflow: 1.4
+  visibleLeftStartReservoir: 0
   simulationYaw: 0
   waterColor: {r: 0.015, g: 0.25, b: 0.72, a: 0.78}

@@ -89,7 +89,8 @@ void ApplyFlux(uint3 id : SV_DispatchThreadID)
     if (IsBlocked(id.xy)) { float4 blockedState = StateMap[id.xy]; blockedState.g = 0; StateMap[id.xy] = blockedState; return; }
     int2 p = int2(id.xy);
     float4 outgoing = FluxMap[id.xy];
-    float incoming = FluxMap[ClampCell(p+int2(-1,0))].y + FluxMap[ClampCell(p+int2(1,0))].x
+    // Strictly one-way on X: receive water from the left, never from the right.
+    float incoming = FluxMap[ClampCell(p+int2(-1,0))].y
                    + FluxMap[ClampCell(p+int2(0,1))].w + FluxMap[ClampCell(p+int2(0,-1))].z;
     float4 state = StateMap[id.xy];
     state.g = clamp((state.g + _DeltaTime * (incoming-outgoing.x-outgoing.y-outgoing.z-outgoing.w) / _CellArea)

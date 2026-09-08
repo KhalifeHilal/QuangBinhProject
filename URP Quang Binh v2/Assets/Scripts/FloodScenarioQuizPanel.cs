@@ -52,7 +52,7 @@ public sealed class FloodScenarioQuizPanel : MonoBehaviour
         root.sizeDelta = new Vector2(1450, 1020);
         root.localScale = Vector3.one * .0015f;
         gameObject.AddComponent<Image>().color = new Color(.025f, .055f, .09f, .98f);
-        FloodLearningUI.Text("Title", transform, "A1 - P1  |  Dominant Low Corridor", 44, FontStyles.Bold, -28, 62, TextAlignmentOptions.Left, 55);
+        FloodLearningUI.Text("Title", transform, "A1 - P1  |  Floodway Path Identification", 44, FontStyles.Bold, -28, 62, TextAlignmentOptions.Left, 55);
 
         questionGroup = FloodLearningUI.Group("QuestionGroup", transform);
         FloodLearningUI.Text("Question", questionGroup.transform, "Which pathway should receive greater attention when planning flood protection?", 34, FontStyles.Bold, -110, 90, TextAlignmentOptions.TopLeft, 55);
@@ -201,7 +201,7 @@ sealed class FloodScenarioContinuePrompt : MonoBehaviour
         GameObject root = new GameObject("A1_P1_ContinuePrompt", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler)); root.GetComponent<Canvas>().renderMode = RenderMode.WorldSpace;
         RectTransform r = (RectTransform)root.transform; r.sizeDelta = new Vector2(900, 330); r.localScale = Vector3.one * .0015f; root.AddComponent<Image>().color = new Color(.025f, .055f, .09f, .96f);
         FloodLearningUI.Text("Title", root.transform, "A1 - P1", 39, FontStyles.Bold, -35, 55, TextAlignmentOptions.Center, 45);
-        FloodLearningUI.Text("Scenario", root.transform, "Dominant Low Corridor", 43, FontStyles.Bold, -105, 65, TextAlignmentOptions.Center, 45);
+        FloodLearningUI.Text("Scenario", root.transform, "Floodway Path Identification", 43, FontStyles.Bold, -105, 65, TextAlignmentOptions.Center, 45);
         TMP_Text prompt = FloodLearningUI.Text("Prompt", root.transform, "Press A to continue", 35, FontStyles.Normal, -210, 55, TextAlignmentOptions.Center, 45); prompt.color = new Color(.35f, .82f, 1);
         FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.1f); return root;
     }
@@ -211,10 +211,9 @@ sealed class FloodScenarioContinuePrompt : MonoBehaviour
         GameObject root = new GameObject("A1_P1_DykeBuildingPrompt", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler)); root.GetComponent<Canvas>().renderMode = RenderMode.WorldSpace;
         RectTransform r = (RectTransform)root.transform; r.sizeDelta = new Vector2(1050, 390); r.localScale = Vector3.one * .0015f; root.AddComponent<Image>().color = new Color(.025f, .055f, .09f, .96f);
         FloodLearningUI.Text("Title", root.transform, "A1 - P1  |  Build protection", 39, FontStyles.Bold, -35, 58, TextAlignmentOptions.Center, 45);
-        FloodLearningUI.Text("Instructions", root.transform, "Build dykes between the snap points with the trigger button.", 33, FontStyles.Normal, -125, 90, TextAlignmentOptions.Center, 55);
         TMP_Text prompt = FloodLearningUI.Text("Prompt", root.transform,
-            "Build dykes anywhere with the trigger. Point at one and press Grip to destroy it.\nPress A when you are finished to run the flood simulation.",
-            29, FontStyles.Bold, -215, 105, TextAlignmentOptions.Center, 55); prompt.color = new Color(.35f, .82f, 1);
+            "Build dykes for your answer anywhere on the terrain with the trigger.\nPoint at one and press Grip to destroy it. Press A when you are finished.",
+            30, FontStyles.Bold, -135, 125, TextAlignmentOptions.Center, 55); prompt.color = new Color(.35f, .82f, 1);
         FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.1f); return root;
     }
 }
