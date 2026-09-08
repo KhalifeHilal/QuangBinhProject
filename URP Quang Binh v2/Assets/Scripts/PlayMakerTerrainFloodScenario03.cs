@@ -14,13 +14,8 @@ public sealed class PlayMakerTerrainFloodScenario03 : MonoBehaviour
     TerrainFloodSimulation simulation;
     float elapsed;
     GameObject continuePrompt;
-<<<<<<< HEAD
-    GameObject pathwayHint;
-    GameObject waterDirectionArrow;
-=======
     GameObject observationHint;
     GameObject waterDirectionHint;
->>>>>>> 1d22ab49 (finished scenario)
     int selectedAnswer = -1;
     Phase phase;
 
@@ -66,11 +61,7 @@ public sealed class PlayMakerTerrainFloodScenario03 : MonoBehaviour
         activeScenario = new GameObject("Scenario_A1_P1_PathwayPreview");
         activeScenario.transform.SetParent(parent, false);
         activeScenario.AddComponent<FloodPathwayScenarioA1P1>();
-<<<<<<< HEAD
-        pathwayHint = FloodScenarioOverlay.ShowPathwayHint();
-=======
         observationHint = ScenarioGuidanceOverlay.ShowObservation("Look at the pathways");
->>>>>>> 1d22ab49 (finished scenario)
         simulation = null;
         elapsed = 0;
         phase = Phase.Running;
@@ -80,11 +71,7 @@ public sealed class PlayMakerTerrainFloodScenario03 : MonoBehaviour
     {
         simulation?.StopSimulation();
         // The pathways remain visible behind the question.
-<<<<<<< HEAD
-        if (pathwayHint != null) Destroy(pathwayHint);
-=======
         if (observationHint != null) Destroy(observationHint);
->>>>>>> 1d22ab49 (finished scenario)
         ClearDykeManagerChildren();
         phase = Phase.Question;
         FloodScenarioQuizPanel.Show(RepeatScenario, BeginDykeBuilding);
@@ -104,11 +91,7 @@ public sealed class PlayMakerTerrainFloodScenario03 : MonoBehaviour
         SetDykeConstruction(true, false);
         SetTutorialDykeBuildingGuide(false);
         continuePrompt = FloodScenarioContinuePrompt.ShowDykeBuilding();
-<<<<<<< HEAD
-        waterDirectionArrow = FloodScenarioOverlay.ShowWaterDirectionArrow();
-=======
         waterDirectionHint = ScenarioGuidanceOverlay.ShowWaterFromLeft();
->>>>>>> 1d22ab49 (finished scenario)
         phase = Phase.BuildingDykes;
     }
 
@@ -117,12 +100,7 @@ public sealed class PlayMakerTerrainFloodScenario03 : MonoBehaviour
         if (floodPrefab == null) { Debug.LogError("Flood scenario prefab is missing.", this); return; }
         HideA1P1Buildings();
         if (continuePrompt != null) Destroy(continuePrompt);
-<<<<<<< HEAD
-        if (waterDirectionArrow != null) Destroy(waterDirectionArrow);
-        SetTutorialDykeBuildingGuide(false);
-=======
         if (waterDirectionHint != null) Destroy(waterDirectionHint);
->>>>>>> 1d22ab49 (finished scenario)
         SetDykeConstruction(false, false);
         Transform parent = Find("FakeFloodEnvironment")?.transform;
         activeScenario = Instantiate(floodPrefab, parent, false);
@@ -141,9 +119,6 @@ public sealed class PlayMakerTerrainFloodScenario03 : MonoBehaviour
         activeScenario = null;
         ClearDykeManagerChildren();
         phase = Phase.Confidence;
-<<<<<<< HEAD
-        FloodScenarioQuizPanel.ShowConfidence(selectedAnswer);
-=======
         FloodScenarioQuizPanel.ShowConfidence(selectedAnswer, StartA1P2);
     }
 
@@ -152,7 +127,6 @@ public sealed class PlayMakerTerrainFloodScenario03 : MonoBehaviour
         A1P2ScenarioFlow flow = gameObject.GetComponent<A1P2ScenarioFlow>();
         if (flow == null) flow = gameObject.AddComponent<A1P2ScenarioFlow>();
         flow.Begin(floodPrefab, pathwayViewingDuration, duration);
->>>>>>> 1d22ab49 (finished scenario)
     }
 
     static void SetDykeConstruction(bool enabled, bool hideOldDykes)
@@ -232,13 +206,7 @@ public sealed class PlayMakerTerrainFloodScenario03 : MonoBehaviour
     {
         questA?.Disable(); questA?.Dispose();
         if (continuePrompt != null) Destroy(continuePrompt);
-<<<<<<< HEAD
-        if (pathwayHint != null) Destroy(pathwayHint);
-        if (waterDirectionArrow != null) Destroy(waterDirectionArrow);
-        SetTutorialDykeBuildingGuide(false);
-=======
         if (observationHint != null) Destroy(observationHint);
         if (waterDirectionHint != null) Destroy(waterDirectionHint);
->>>>>>> 1d22ab49 (finished scenario)
     }
 }

@@ -20,6 +20,7 @@ public sealed class FloodScenarioQuizPanel : MonoBehaviour
     int selectedAnswer = -1;
     Action repeatScenario;
     Action<int> answerSubmitted;
+    Action confidenceCompleted;
     bool confidenceOnly;
 
     public static FloodScenarioQuizPanel Show(Action onRepeatScenario, Action<int> onAnswerSubmitted)
@@ -35,9 +36,15 @@ public sealed class FloodScenarioQuizPanel : MonoBehaviour
 
     public static FloodScenarioQuizPanel ShowConfidence(int answer)
     {
+        return ShowConfidence(answer, null);
+    }
+
+    public static FloodScenarioQuizPanel ShowConfidence(int answer, Action onCompleted)
+    {
         GameObject root = new GameObject("Confidence_A1_P1", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(TrackedDeviceGraphicRaycaster));
         FloodScenarioQuizPanel panel = root.AddComponent<FloodScenarioQuizPanel>();
         panel.selectedAnswer = answer;
+        panel.confidenceCompleted = onCompleted;
         panel.confidenceOnly = true;
         panel.Build();
         FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.25f);
@@ -92,6 +99,8 @@ public sealed class FloodScenarioQuizPanel : MonoBehaviour
         correct.color = new Color(.4f, 1, .55f);
         FloodLearningUI.Text("ExplanationTitle", feedbackGroup.transform, "Explanation", 34, FontStyles.Bold, -395, 55, TextAlignmentOptions.Left, 70);
         FloodLearningUI.Text("Explanation", feedbackGroup.transform, "Floodwater movement is strongly influenced by terrain connectivity and elevation. A longer but continuously low-lying corridor can provide a more plausible route than a shorter route that requires water to cross higher terrain. Straight-line distance alone is therefore not sufficient for identifying the dominant flood pathway.", 29, FontStyles.Normal, -465, 260, TextAlignmentOptions.TopLeft, 70);
+        if (confidenceCompleted != null)
+            FloodLearningUI.Button("Continue", feedbackGroup.transform, "Continue", -785, 82, 29, ContinueAfterFeedback, 360);
     }
 
     void SelectAnswer(int index)
@@ -137,6 +146,14 @@ public sealed class FloodScenarioQuizPanel : MonoBehaviour
         result.text = selectedAnswer == 1 ? $"Correct!  |  Confidence: {confidence}%" : $"Your answer: {(char)('A' + selectedAnswer)}  |  Confidence: {confidence}%";
         result.color = selectedAnswer == 1 ? new Color(.4f, 1, .55f) : new Color(1, .68f, .35f);
         Debug.Log($"A1-P1 result: answer={(char)('A' + selectedAnswer)}, correct={selectedAnswer == 1}, confidence={confidence}");
+    }
+
+    void ContinueAfterFeedback()
+    {
+        Action callback = confidenceCompleted;
+        confidenceCompleted = null;
+        callback?.Invoke();
+        Destroy(gameObject);
     }
 }
 
