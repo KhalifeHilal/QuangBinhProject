@@ -29,6 +29,17 @@ public sealed class PlayMakerTerrainFloodScenario03 : MonoBehaviour
         questA.Enable();
     }
 
+    /// <summary>Starts A1-P1 directly without waiting for the PlayMaker tutorial.</summary>
+    public void BeginDebug(GameObject prefab, float previewSeconds, float simulationSeconds)
+    {
+        floodPrefab = prefab;
+        pathwayViewingDuration = previewSeconds;
+        duration = simulationSeconds;
+        Hide("StartGame"); Hide("TutorialAnimation_01"); Hide("TutorialAnimation_02");
+        ClearDykeManagerChildren();
+        StartPathwayPreview();
+    }
+
     void Update()
     {
         if (phase == Phase.WaitingForTutorial && tutorial != null && tutorial.Fsm.ActiveStateName == "Etat 12")

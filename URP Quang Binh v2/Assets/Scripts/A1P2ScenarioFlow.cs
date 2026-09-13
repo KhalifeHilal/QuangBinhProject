@@ -26,6 +26,12 @@ public sealed class A1P2ScenarioFlow : MonoBehaviour
         phase = Phase.WaitingForA;
     }
 
+    public void BeginDebug(GameObject prefab, float previewSeconds, float simulationSeconds)
+    {
+        Begin(prefab, previewSeconds, simulationSeconds);
+        StartPreview();
+    }
+
     void Update()
     {
         if (phase == Phase.WaitingForA && questA.WasPressedThisFrame()) StartPreview();
@@ -82,7 +88,15 @@ public sealed class A1P2ScenarioFlow : MonoBehaviour
         simulation?.StopSimulation(); CleanupObject(ref activeFlood); ClearDykeManagerChildren();
         SetScenarioObjects(false);
         phase = Phase.Confidence;
-        P2Panel.ShowConfidence(selectedAnswer);
+        P2Panel.ShowConfidence(selectedAnswer, StartA1P3);
+    }
+
+    void StartA1P3()
+    {
+        SetScenarioObjects(false);
+        A1P3ScenarioFlow flow = gameObject.GetComponent<A1P3ScenarioFlow>();
+        if (flow == null) flow = gameObject.AddComponent<A1P3ScenarioFlow>();
+        flow.Begin(floodPrefab, viewingDuration, floodDuration);
     }
 
     static void SetDykeConstruction(bool enabled)
@@ -179,7 +193,7 @@ static class P2Panel
         FloodLearningUI.Button("Repeat", root.transform, "Repeat scenario", -840, 82, 29, () => { UnityEngine.Object.Destroy(root); repeat(); }, 390);
         FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.25f);
     }
-    public static void ShowConfidence(int answer)
+    public static void ShowConfidence(int answer, Action onCompleted)
     {
         GameObject root = CanvasRoot("Confidence_A1_P2", new Vector2(1450, 1020));
         GameObject confidence = FloodLearningUI.Group("ConfidenceGroup", root.transform);
@@ -190,16 +204,17 @@ static class P2Panel
         slider.onValueChanged.AddListener(v => { int n = Mathf.Clamp(Mathf.RoundToInt(v), 0, 5); value.text = $"{n * 20}% - {labels[n]}"; });
         FloodLearningUI.Text("Ticks", confidence.transform, "0                 20                 40                 60                 80                100", 25, FontStyles.Normal, -455, 45, TextAlignmentOptions.Center, 170);
         FloodLearningUI.Text("Scale", confidence.transform, "Not confident                                      Moderately confident                                      Very confident", 23, FontStyles.Normal, -510, 55, TextAlignmentOptions.Center, 130).color = new Color(.75f, .85f, .95f);
-        FloodLearningUI.Button("Confirm", confidence.transform, "Confirm confidence", -650, 95, 31, () => ShowFeedback(root, answer, Mathf.RoundToInt(slider.value) * 20), 420);
+        FloodLearningUI.Button("Confirm", confidence.transform, "Confirm confidence", -650, 95, 31, () => ShowFeedback(root, answer, Mathf.RoundToInt(slider.value) * 20, onCompleted), 420);
         FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.25f);
     }
-    static void ShowFeedback(GameObject root, int answer, int confidence)
+    static void ShowFeedback(GameObject root, int answer, int confidence, Action onCompleted)
     {
         foreach (Transform child in root.transform) UnityEngine.Object.Destroy(child.gameObject);
         TMP_Text result = FloodLearningUI.Text("Result", root.transform, answer == 3 ? $"Correct!  |  Confidence: {confidence}%" : $"Your answer: {(char)('A' + answer)}  |  Confidence: {confidence}%", 39, FontStyles.Bold, -120, 62, TextAlignmentOptions.Center, 65); result.color = answer == 3 ? new Color(.4f, 1f, .55f) : new Color(1f, .68f, .35f);
         FloodLearningUI.Text("Correct", root.transform, "Correct answer: D) The surrounding high terrain can function as part of the continuous boundary that limits possible routes around the barrier.", 31, FontStyles.Bold, -220, 150, TextAlignmentOptions.TopLeft, 70).color = new Color(.4f, 1f, .55f);
         FloodLearningUI.Text("ExplanationTitle", root.transform, "Explanation", 34, FontStyles.Bold, -410, 55, TextAlignmentOptions.Left, 70);
         FloodLearningUI.Text("Explanation", root.transform, "A barrier is more effective when its endpoints connect to terrain that restricts lateral flow. Existing high ground can extend the effective protective boundary beyond the constructed barrier itself and reduce opportunities for water to bypass it.", 29, FontStyles.Normal, -480, 240, TextAlignmentOptions.TopLeft, 70);
+        FloodLearningUI.Button("Continue", root.transform, "Continue", -785, 82, 29, () => { UnityEngine.Object.Destroy(root); onCompleted?.Invoke(); }, 360);
         Debug.Log($"A1-P2 result: answer={(char)('A' + answer)}, correct={answer == 3}, confidence={confidence}");
     }
     public static GameObject CanvasRoot(string name, Vector2 size, float scale = .0015f)
