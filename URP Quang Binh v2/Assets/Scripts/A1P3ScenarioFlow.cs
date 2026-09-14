@@ -95,7 +95,14 @@ public sealed class A1P3ScenarioFlow : MonoBehaviour
         ClearDykes();
         SetP3ScenarioObjects(false);
         phase = Phase.Confidence;
-        P3Panel.ShowConfidence(selectedAnswer);
+        P3Panel.ShowConfidence(selectedAnswer, StartA1P4);
+    }
+
+    void StartA1P4()
+    {
+        A1P4ScenarioFlow flow = gameObject.GetComponent<A1P4ScenarioFlow>();
+        if (flow == null) flow = gameObject.AddComponent<A1P4ScenarioFlow>();
+        flow.Begin(floodPrefab, viewingDuration, floodDuration);
     }
 
     static void SetDykeConstruction(bool enabled)
@@ -308,7 +315,7 @@ static class P3Panel
         FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.25f);
     }
 
-    public static void ShowConfidence(int answer)
+    public static void ShowConfidence(int answer, Action onCompleted = null)
     {
         GameObject root = P2Panel.CanvasRoot("Confidence_A1_P3", new Vector2(1500, 1080));
         GameObject group = FloodLearningUI.Group("ConfidenceGroup", root.transform);
@@ -320,11 +327,11 @@ static class P3Panel
         slider.onValueChanged.AddListener(v => { int n = Mathf.Clamp(Mathf.RoundToInt(v), 0, 5); value.text = $"{n * 20}% - {labels[n]}"; });
         FloodLearningUI.Text("Ticks", group.transform, "0                 20                 40                 60                 80                100", 25, FontStyles.Normal, -455, 45, TextAlignmentOptions.Center, 170);
         FloodLearningUI.Text("Scale", group.transform, "Not confident                                      Moderately confident                                      Very confident", 23, FontStyles.Normal, -510, 55, TextAlignmentOptions.Center, 130).color = new Color(.75f, .85f, .95f);
-        FloodLearningUI.Button("Confirm", group.transform, "Confirm confidence", -650, 95, 31, () => ShowFeedback(root, answer, Mathf.RoundToInt(slider.value) * 20), 420);
+        FloodLearningUI.Button("Confirm", group.transform, "Confirm confidence", -650, 95, 31, () => ShowFeedback(root, answer, Mathf.RoundToInt(slider.value) * 20, onCompleted), 420);
         FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.25f);
     }
 
-    static void ShowFeedback(GameObject root, int answer, int confidence)
+    static void ShowFeedback(GameObject root, int answer, int confidence, Action onCompleted)
     {
         foreach (Transform child in root.transform) UnityEngine.Object.Destroy(child.gameObject);
         TMP_Text result = FloodLearningUI.Text("Result", root.transform, answer == 1 ? $"Correct!  |  Confidence: {confidence}%" : $"Your answer: {(char)('A' + answer)}  |  Confidence: {confidence}%", 39, FontStyles.Bold, -105, 62, TextAlignmentOptions.Center, 65);
@@ -332,6 +339,8 @@ static class P3Panel
         FloodLearningUI.Text("Correct", root.transform, "Correct answer: B) The western endpoint did not adequately close the available flood pathway, allowing water to bypass the barrier.", 31, FontStyles.Bold, -205, 145, TextAlignmentOptions.TopLeft, 70).color = new Color(.4f, 1f, .55f);
         FloodLearningUI.Text("ExplanationTitle", root.transform, "Explanation", 34, FontStyles.Bold, -390, 55, TextAlignmentOptions.Left, 70);
         FloodLearningUI.Text("Explanation", root.transform, "A barrier can remain structurally intact and still fail as a protective intervention if water can move around one of its endpoints. The relevant issue is continuity of the protective boundary, not simply whether the central section remains intact.", 29, FontStyles.Normal, -460, 230, TextAlignmentOptions.TopLeft, 70);
+        if (onCompleted != null)
+            FloodLearningUI.Button("Continue", root.transform, "Continue", -775, 82, 29, () => { UnityEngine.Object.Destroy(root); onCompleted(); }, 360);
         Debug.Log($"A1-P3 result: answer={(char)('A' + answer)}, correct={answer == 1}, confidence={confidence}");
     }
 }

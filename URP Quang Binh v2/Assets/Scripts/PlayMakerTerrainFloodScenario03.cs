@@ -40,6 +40,19 @@ public sealed class PlayMakerTerrainFloodScenario03 : MonoBehaviour
         StartPathwayPreview();
     }
 
+    /// <summary>Arms A1-P1 after the tutorial has completed, without overlapping it.</summary>
+    public void BeginAfterTutorial(GameObject prefab, float previewSeconds, float simulationSeconds)
+    {
+        floodPrefab = prefab;
+        pathwayViewingDuration = previewSeconds;
+        duration = simulationSeconds;
+        Hide("StartGame"); Hide("TutorialAnimation_01"); Hide("TutorialAnimation_02");
+        ClearDykeManagerChildren();
+        if (continuePrompt != null) Destroy(continuePrompt);
+        continuePrompt = FloodScenarioContinuePrompt.Show();
+        phase = Phase.WaitingForA;
+    }
+
     void Update()
     {
         if (phase == Phase.WaitingForTutorial && tutorial != null && tutorial.Fsm.ActiveStateName == "Etat 12")
