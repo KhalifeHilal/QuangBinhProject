@@ -10,7 +10,8 @@ public sealed class FloodScenarioDebugLauncher : MonoBehaviour
         A1_P1_FloodwayPathIdentification,
         A1_P2_Topography,
         A1_P3_BarrierContinuityAndBypassing,
-        A1_P4_WaterRedistribution
+        A1_P4_WaterRedistribution,
+        A1_P5_ResourceEfficientPlacement
     }
 
     [Header("Editor Test Start")]
@@ -112,6 +113,13 @@ public sealed class FloodScenarioDebugLauncher : MonoBehaviour
             {
                 A1P4ScenarioFlow flow = FindFirstObjectByType<A1P4ScenarioFlow>();
                 if (flow == null) flow = gameObject.AddComponent<A1P4ScenarioFlow>();
+                flow.Begin(floodPrefab, previewDuration, floodDuration);
+                break;
+            }
+            case Scenario.A1_P5_ResourceEfficientPlacement:
+            {
+                A1P5ScenarioFlow flow = FindFirstObjectByType<A1P5ScenarioFlow>();
+                if (flow == null) flow = gameObject.AddComponent<A1P5ScenarioFlow>();
                 flow.Begin(floodPrefab, previewDuration, floodDuration);
                 break;
             }

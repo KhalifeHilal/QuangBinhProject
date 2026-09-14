@@ -109,7 +109,14 @@ public sealed class A1P4ScenarioFlow : MonoBehaviour
         ClearDykes();
         SetP4ScenarioObjects(false);
         phase = Phase.Confidence;
-        A1P4Panel.ShowConfidence(selectedAnswer);
+        A1P4Panel.ShowConfidence(selectedAnswer, StartA1P5);
+    }
+
+    void StartA1P5()
+    {
+        A1P5ScenarioFlow flow = gameObject.GetComponent<A1P5ScenarioFlow>();
+        if (flow == null) flow = gameObject.AddComponent<A1P5ScenarioFlow>();
+        flow.Begin(floodPrefab, viewingDuration, floodDuration);
     }
 
     static void SetDykeConstruction(bool enabled)
@@ -376,7 +383,7 @@ static class A1P4Panel
         FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.25f);
     }
 
-    public static void ShowConfidence(int answer)
+    public static void ShowConfidence(int answer, Action onCompleted = null)
     {
         GameObject root = P2Panel.CanvasRoot("Confidence_A1_P4", new Vector2(1500, 1080));
         GameObject group = FloodLearningUI.Group("ConfidenceGroup", root.transform);
@@ -393,11 +400,11 @@ static class A1P4Panel
         FloodLearningUI.Text("Ticks", group.transform, "0                 20                 40                 60                 80                100", 25, FontStyles.Normal, -455, 45, TextAlignmentOptions.Center, 170);
         FloodLearningUI.Text("Scale", group.transform, "Not confident                                      Moderately confident                                      Very confident", 23, FontStyles.Normal, -510, 55, TextAlignmentOptions.Center, 130).color = new Color(.75f, .85f, .95f);
         FloodLearningUI.Button("Confirm", group.transform, "Confirm confidence", -650, 95, 31,
-            () => ShowFeedback(root, answer, Mathf.RoundToInt(slider.value) * 20), 420);
+            () => ShowFeedback(root, answer, Mathf.RoundToInt(slider.value) * 20, onCompleted), 420);
         FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.25f);
     }
 
-    static void ShowFeedback(GameObject root, int answer, int confidence)
+    static void ShowFeedback(GameObject root, int answer, int confidence, Action onCompleted)
     {
         foreach (Transform child in root.transform) UnityEngine.Object.Destroy(child.gameObject);
         TMP_Text result = FloodLearningUI.Text("Result", root.transform,
@@ -412,7 +419,7 @@ static class A1P4Panel
             "The observed pattern is consistent with a barrier successfully reducing flow through one route while increasing upstream storage and encouraging water to use another pathway. Effective evaluation therefore requires looking beyond the protected area.",
             29, FontStyles.Normal, -485, 235, TextAlignmentOptions.TopLeft, 70);
         FloodLearningUI.Button("Finish", root.transform, "Finish", -780, 82, 29,
-            () => UnityEngine.Object.Destroy(root), 360);
+            () => { UnityEngine.Object.Destroy(root); onCompleted?.Invoke(); }, 360);
         Debug.Log($"A1-P4 result: answer={(char)('A' + answer)}, correct={answer == 2}, confidence={confidence}");
     }
 }
