@@ -84,6 +84,7 @@ public sealed class FloodScenarioDebugLauncher : MonoBehaviour
     {
         waitingForTutorial = false;
         scenarioStarted = true;
+        TutorialTerrainTopography.ActivateAfterTutorial();
 
         switch (selectedScenario)
         {

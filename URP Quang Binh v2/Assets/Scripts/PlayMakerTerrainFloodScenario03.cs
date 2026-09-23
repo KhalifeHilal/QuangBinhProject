@@ -77,6 +77,7 @@ public sealed class PlayMakerTerrainFloodScenario03 : MonoBehaviour
 
     void StartPathwayPreview()
     {
+        TutorialTerrainTopography.ActivateAfterTutorial();
         HideA1P1Buildings();
         SetDykeConstruction(false, true);
         Transform parent = Find("FakeFloodEnvironment")?.transform;
