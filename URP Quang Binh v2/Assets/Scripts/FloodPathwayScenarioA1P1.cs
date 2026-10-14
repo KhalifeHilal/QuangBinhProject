@@ -77,6 +77,7 @@ public sealed class FloodPathwayScenarioA1P1 : MonoBehaviour
         Camera camera = Camera.main;
         if (camera != null) rect.rotation = Quaternion.LookRotation(rect.position - camera.transform.position, Vector3.up);
         Image background = canvasObject.GetComponent<Image>();
+        FloodLearningUIStyle.ApplyPanel(background);
         background.color = new Color(0f, 0f, 0f, .9f);
         background.raycastTarget = false;
 
@@ -92,6 +93,7 @@ public sealed class FloodPathwayScenarioA1P1 : MonoBehaviour
         label.alignment = TextAlignmentOptions.Center;
         label.color = Color.white;
         label.raycastTarget = false;
+        FloodLearningUIStyle.ApplyFont(label);
     }
 
     static Renderer FindTerrainRenderer()

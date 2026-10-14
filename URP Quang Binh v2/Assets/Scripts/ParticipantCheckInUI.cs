@@ -54,7 +54,7 @@ public sealed class ParticipantCheckInUI : MonoBehaviour
         root.sizeDelta = new Vector2(1100, 900);
         root.localScale = Vector3.one * .00135f;
         Image background = gameObject.AddComponent<Image>();
-        background.color = new Color(.02f, .045f, .075f, .98f);
+        FloodLearningUIStyle.ApplyPanel(background);
         // The panel itself is raycastable so the hover marker is visible anywhere on it.
         // Buttons remain the topmost hit and receive the Trigger click.
         background.raycastTarget = true;
@@ -181,6 +181,7 @@ public sealed class ParticipantCheckInUI : MonoBehaviour
         text.text = value; text.fontSize = size; text.alignment = alignment; text.color = Color.white;
         text.fontStyle = bold ? FontStyles.Bold : FontStyles.Normal;
         text.enableWordWrapping = true; text.raycastTarget = false;
+        FloodLearningUIStyle.ApplyFont(text);
         return text;
     }
 
@@ -213,7 +214,7 @@ public sealed class ParticipantCheckInUI : MonoBehaviour
         RectTransform rect = (RectTransform)obj.transform;
         rect.anchorMin = rect.anchorMax = new Vector2(.5f, 1f); rect.pivot = new Vector2(.5f, 1f);
         rect.anchoredPosition = new Vector2(x, top); rect.sizeDelta = new Vector2(width, 90);
-        Image image = obj.GetComponent<Image>(); image.color = new Color(.07f, .24f, .37f, 1f);
+        Image image = obj.GetComponent<Image>(); FloodLearningUIStyle.ApplyButton(image);
         Button button = obj.GetComponent<Button>(); button.onClick.AddListener(action);
         ColorBlock colors = button.colors; colors.highlightedColor = new Color(.12f, .65f, .9f); colors.pressedColor = new Color(.04f, .75f, 1f); button.colors = colors;
         TMP_Text text = TextOnButton(label, obj.transform, fontSize);
@@ -224,6 +225,6 @@ public sealed class ParticipantCheckInUI : MonoBehaviour
     {
         GameObject obj = new GameObject("Label", typeof(RectTransform), typeof(TextMeshProUGUI)); obj.transform.SetParent(parent, false);
         RectTransform rect = (RectTransform)obj.transform; rect.anchorMin = Vector2.zero; rect.anchorMax = Vector2.one; rect.offsetMin = Vector2.zero; rect.offsetMax = Vector2.zero;
-        TMP_Text text = obj.GetComponent<TMP_Text>(); text.text = value; text.fontSize = size; text.alignment = TextAlignmentOptions.Center; text.color = Color.white; text.fontStyle = FontStyles.Bold; text.raycastTarget = false; return text;
+        TMP_Text text = obj.GetComponent<TMP_Text>(); text.text = value; text.fontSize = size; text.alignment = TextAlignmentOptions.Center; text.color = Color.white; text.fontStyle = FontStyles.Bold; text.raycastTarget = false; FloodLearningUIStyle.ApplyFont(text); return text;
     }
 }

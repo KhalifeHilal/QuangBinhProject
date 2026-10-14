@@ -47,7 +47,8 @@ public static class ScenarioGuidanceOverlay
         rect.sizeDelta = size;
         rect.localScale = Vector3.one * scale;
         Image background = root.GetComponent<Image>();
-        background.color = new Color(0, 0, 0, .82f);
+        FloodLearningUIStyle.ApplyPanel(background);
+        background.color = new Color(.025f, .055f, .09f, .92f);
         background.raycastTarget = false;
         return root;
     }

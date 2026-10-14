@@ -202,7 +202,6 @@ static class P2Panel
         Slider slider = FloodLearningUI.Slider("Slider", confidence.transform, -390); slider.minValue = 0; slider.maxValue = 5; slider.wholeNumbers = true; slider.value = 3;
         string[] labels = { "Not confident", "Low confidence", "Slightly confident", "Moderately confident", "Confident", "Very confident" };
         slider.onValueChanged.AddListener(v => { int n = Mathf.Clamp(Mathf.RoundToInt(v), 0, 5); value.text = $"{n * 20}% - {labels[n]}"; });
-        FloodLearningUI.Text("Ticks", confidence.transform, "0                 20                 40                 60                 80                100", 25, FontStyles.Normal, -455, 45, TextAlignmentOptions.Center, 170);
         FloodLearningUI.Text("Scale", confidence.transform, "Not confident                                      Moderately confident                                      Very confident", 23, FontStyles.Normal, -510, 55, TextAlignmentOptions.Center, 130).color = new Color(.75f, .85f, .95f);
         FloodLearningUI.Button("Confirm", confidence.transform, "Confirm confidence", -650, 95, 31, () => ShowFeedback(root, answer, Mathf.RoundToInt(slider.value) * 20, onCompleted), 420);
         FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.25f);
@@ -221,6 +220,6 @@ static class P2Panel
     {
         GameObject root = new GameObject(name, typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(TrackedDeviceGraphicRaycaster), typeof(Image));
         root.GetComponent<Canvas>().renderMode = RenderMode.WorldSpace; root.GetComponent<Canvas>().sortingOrder = 200;
-        RectTransform rect = (RectTransform)root.transform; rect.sizeDelta = size; rect.localScale = Vector3.one * scale; Image image = root.GetComponent<Image>(); image.color = new Color(.025f, .055f, .09f, .98f); image.raycastTarget = false; return root;
+        RectTransform rect = (RectTransform)root.transform; rect.sizeDelta = size; rect.localScale = Vector3.one * scale; Image image = root.GetComponent<Image>(); FloodLearningUIStyle.ApplyPanel(image); image.raycastTarget = false; return root;
     }
 }

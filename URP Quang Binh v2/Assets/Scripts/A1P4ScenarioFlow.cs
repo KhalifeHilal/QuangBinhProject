@@ -397,7 +397,6 @@ static class A1P4Panel
             int n = Mathf.Clamp(Mathf.RoundToInt(v), 0, 5);
             value.text = $"{n * 20}% - {labels[n]}";
         });
-        FloodLearningUI.Text("Ticks", group.transform, "0                 20                 40                 60                 80                100", 25, FontStyles.Normal, -455, 45, TextAlignmentOptions.Center, 170);
         FloodLearningUI.Text("Scale", group.transform, "Not confident                                      Moderately confident                                      Very confident", 23, FontStyles.Normal, -510, 55, TextAlignmentOptions.Center, 130).color = new Color(.75f, .85f, .95f);
         FloodLearningUI.Button("Confirm", group.transform, "Confirm confidence", -650, 95, 31,
             () => ShowFeedback(root, answer, Mathf.RoundToInt(slider.value) * 20, onCompleted), 420);

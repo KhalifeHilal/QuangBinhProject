@@ -58,7 +58,7 @@ public sealed class FloodScenarioQuizPanel : MonoBehaviour
         RectTransform root = (RectTransform)transform;
         root.sizeDelta = new Vector2(1450, 1020);
         root.localScale = Vector3.one * .0015f;
-        gameObject.AddComponent<Image>().color = new Color(.025f, .055f, .09f, .98f);
+        FloodLearningUIStyle.ApplyPanel(gameObject.AddComponent<Image>());
         FloodLearningUI.Text("Title", transform, "A1 - P1  |  Floodway Path Identification", 44, FontStyles.Bold, -28, 62, TextAlignmentOptions.Left, 55);
 
         questionGroup = FloodLearningUI.Group("QuestionGroup", transform);
@@ -85,7 +85,6 @@ public sealed class FloodScenarioQuizPanel : MonoBehaviour
         confidenceSlider = FloodLearningUI.Slider("ConfidenceSlider", confidenceGroup.transform, -390);
         confidenceSlider.minValue = 0; confidenceSlider.maxValue = 5; confidenceSlider.wholeNumbers = true; confidenceSlider.value = 3;
         confidenceSlider.onValueChanged.AddListener(UpdateConfidenceText);
-        FloodLearningUI.Text("Ticks", confidenceGroup.transform, "0                 20                 40                 60                 80                100", 25, FontStyles.Normal, -455, 45, TextAlignmentOptions.Center, 170);
         TMP_Text scale = FloodLearningUI.Text("ScaleLabels", confidenceGroup.transform, "Not confident                                      Moderately confident                                      Very confident", 23, FontStyles.Normal, -510, 55, TextAlignmentOptions.Center, 130);
         scale.color = new Color(.75f, .85f, .95f);
         FloodLearningUI.Button("ConfirmConfidence", confidenceGroup.transform, "Confirm confidence", -650, 95, 31, ConfirmConfidence, 420);
@@ -171,6 +170,7 @@ static class FloodLearningUI
         GameObject obj = new GameObject(name, typeof(RectTransform), typeof(TextMeshProUGUI)); obj.transform.SetParent(parent, false);
         RectTransform r = (RectTransform)obj.transform; r.anchorMin = new Vector2(0, 1); r.anchorMax = new Vector2(1, 1); r.pivot = new Vector2(.5f, 1); r.anchoredPosition = new Vector2(0, top); r.sizeDelta = new Vector2(-2 * margin, height);
         TMP_Text text = obj.GetComponent<TMP_Text>(); text.text = value; text.fontSize = size; text.fontStyle = style; text.alignment = alignment; text.color = Color.white; text.enableWordWrapping = true; text.raycastTarget = false;
+        FloodLearningUIStyle.ApplyFont(text);
         return text;
     }
 
@@ -178,7 +178,7 @@ static class FloodLearningUI
     {
         GameObject obj = new GameObject(name, typeof(RectTransform), typeof(Image), typeof(Button)); obj.transform.SetParent(parent, false);
         RectTransform r = (RectTransform)obj.transform; r.anchorMin = r.anchorMax = new Vector2(.5f, 1); r.pivot = new Vector2(.5f, 1); r.anchoredPosition = new Vector2(0, top); r.sizeDelta = new Vector2(width < 0 ? 1340 : width, height);
-        Image image = obj.GetComponent<Image>(); image.color = new Color(.07f, .24f, .37f, 1);
+        Image image = obj.GetComponent<Image>(); FloodLearningUIStyle.ApplyButton(image);
         Button button = obj.GetComponent<Button>(); ColorBlock colors = button.colors; colors.highlightedColor = new Color(.08f, .46f, .68f, 1); colors.pressedColor = new Color(.04f, .64f, .88f, 1); button.colors = colors; button.onClick.AddListener(action);
         TMP_Text text = Text("Label", obj.transform, label, fontSize, FontStyles.Normal, -8, height - 16, TextAlignmentOptions.MidlineLeft, 25); text.enableAutoSizing = true; text.fontSizeMin = 20; text.fontSizeMax = fontSize;
         return button;
@@ -202,7 +202,7 @@ static class FloodLearningUI
 
     static Image SliderImage(string name, Transform parent, Color color, float height)
     {
-        GameObject obj = new GameObject(name, typeof(RectTransform), typeof(Image)); obj.transform.SetParent(parent, false); RectTransform r = (RectTransform)obj.transform; r.anchorMin = new Vector2(0, .5f); r.anchorMax = new Vector2(1, .5f); r.sizeDelta = new Vector2(0, height); Image image = obj.GetComponent<Image>(); image.color = color; return image;
+        GameObject obj = new GameObject(name, typeof(RectTransform), typeof(Image)); obj.transform.SetParent(parent, false); RectTransform r = (RectTransform)obj.transform; r.anchorMin = new Vector2(0, .5f); r.anchorMax = new Vector2(1, .5f); r.sizeDelta = new Vector2(0, height); Image image = obj.GetComponent<Image>(); FloodLearningUIStyle.ApplySlider(image, color); return image;
     }
 
     public static void PlaceInFrontOfPlayer(Transform target, float distance)
@@ -216,7 +216,7 @@ sealed class FloodScenarioContinuePrompt : MonoBehaviour
     public static GameObject Show()
     {
         GameObject root = new GameObject("A1_P1_ContinuePrompt", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler)); root.GetComponent<Canvas>().renderMode = RenderMode.WorldSpace;
-        RectTransform r = (RectTransform)root.transform; r.sizeDelta = new Vector2(900, 330); r.localScale = Vector3.one * .0015f; root.AddComponent<Image>().color = new Color(.025f, .055f, .09f, .96f);
+        RectTransform r = (RectTransform)root.transform; r.sizeDelta = new Vector2(900, 330); r.localScale = Vector3.one * .0015f; FloodLearningUIStyle.ApplyPanel(root.AddComponent<Image>());
         FloodLearningUI.Text("Title", root.transform, "A1 - P1", 39, FontStyles.Bold, -35, 55, TextAlignmentOptions.Center, 45);
         FloodLearningUI.Text("Scenario", root.transform, "Floodway Path Identification", 43, FontStyles.Bold, -105, 65, TextAlignmentOptions.Center, 45);
         TMP_Text prompt = FloodLearningUI.Text("Prompt", root.transform, "Press A to continue", 35, FontStyles.Normal, -210, 55, TextAlignmentOptions.Center, 45); prompt.color = new Color(.35f, .82f, 1);
@@ -226,7 +226,7 @@ sealed class FloodScenarioContinuePrompt : MonoBehaviour
     public static GameObject ShowDykeBuilding()
     {
         GameObject root = new GameObject("A1_P1_DykeBuildingPrompt", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler)); root.GetComponent<Canvas>().renderMode = RenderMode.WorldSpace;
-        RectTransform r = (RectTransform)root.transform; r.sizeDelta = new Vector2(1050, 390); r.localScale = Vector3.one * .0015f; root.AddComponent<Image>().color = new Color(.025f, .055f, .09f, .96f);
+        RectTransform r = (RectTransform)root.transform; r.sizeDelta = new Vector2(1050, 390); r.localScale = Vector3.one * .0015f; FloodLearningUIStyle.ApplyPanel(root.AddComponent<Image>());
         FloodLearningUI.Text("Title", root.transform, "A1 - P1  |  Build protection", 39, FontStyles.Bold, -35, 58, TextAlignmentOptions.Center, 45);
         TMP_Text prompt = FloodLearningUI.Text("Prompt", root.transform,
             "Build dykes for your answer anywhere on the terrain with the trigger.\nPoint at one and press Grip to destroy it. Press A when you are finished.",
@@ -281,7 +281,8 @@ static class FloodScenarioOverlay
         rect.sizeDelta = size;
         rect.localScale = Vector3.one * scale;
         Image background = root.GetComponent<Image>();
-        background.color = new Color(0f, 0f, 0f, .82f);
+        FloodLearningUIStyle.ApplyPanel(background);
+        background.color = new Color(.025f, .055f, .09f, .92f);
         background.raycastTarget = false;
         return root;
     }
