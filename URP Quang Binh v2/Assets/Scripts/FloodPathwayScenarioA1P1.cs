@@ -78,7 +78,6 @@ public sealed class FloodPathwayScenarioA1P1 : MonoBehaviour
         if (camera != null) rect.rotation = Quaternion.LookRotation(rect.position - camera.transform.position, Vector3.up);
         Image background = canvasObject.GetComponent<Image>();
         FloodLearningUIStyle.ApplyPanel(background);
-        background.color = new Color(0f, 0f, 0f, .9f);
         background.raycastTarget = false;
 
         GameObject labelObject = new GameObject("Text", typeof(RectTransform), typeof(TextMeshProUGUI));

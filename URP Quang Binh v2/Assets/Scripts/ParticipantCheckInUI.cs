@@ -187,16 +187,18 @@ public sealed class ParticipantCheckInUI : MonoBehaviour
 
     Button Button(string label, float fontSize, float top, float x, UnityEngine.Events.UnityAction action, float width)
     {
+        bool numberUp = action != null && action.Method != null && action.Method.Name == nameof(ChangeNumberUp);
+        bool numberDown = action != null && action.Method != null && action.Method.Name == nameof(ChangeNumberDown);
         // Keep both number arrows beside the value, even if their label was imported with bad encoding.
-        if (action != null && action.Method != null)
+        if (numberUp || numberDown)
         {
-            if (action.Method.Name == nameof(ChangeNumberUp))
+            if (numberUp)
             {
-                label = "\u25B2"; top = -205f; x = 180f; width = 150f; fontSize = 30f;
+                label = ""; top = -175f; x = 220f; width = 90f; fontSize = 30f;
             }
-            else if (action.Method.Name == nameof(ChangeNumberDown))
+            else if (numberDown)
             {
-                label = "\u25BC"; top = -305f; x = 180f; width = 150f; fontSize = 30f;
+                label = ""; top = -270f; x = 220f; width = 90f; fontSize = 30f;
             }
         }
         // Repair the two legacy arrow labels if the source file was imported with UTF-8 mojibake.
@@ -213,11 +215,21 @@ public sealed class ParticipantCheckInUI : MonoBehaviour
         obj.transform.SetParent(transform, false);
         RectTransform rect = (RectTransform)obj.transform;
         rect.anchorMin = rect.anchorMax = new Vector2(.5f, 1f); rect.pivot = new Vector2(.5f, 1f);
-        rect.anchoredPosition = new Vector2(x, top); rect.sizeDelta = new Vector2(width, 90);
+        rect.anchoredPosition = new Vector2(x, top); rect.sizeDelta = new Vector2(width, numberUp || numberDown ? 64f : 90f);
         Image image = obj.GetComponent<Image>(); FloodLearningUIStyle.ApplyButton(image);
         Button button = obj.GetComponent<Button>(); button.onClick.AddListener(action);
         ColorBlock colors = button.colors; colors.highlightedColor = new Color(.12f, .65f, .9f); colors.pressedColor = new Color(.04f, .75f, 1f); button.colors = colors;
-        TMP_Text text = TextOnButton(label, obj.transform, fontSize);
+        if (numberUp || numberDown)
+        {
+            GameObject arrowObject = new GameObject("Arrow", typeof(RectTransform), typeof(Image));
+            arrowObject.transform.SetParent(obj.transform, false);
+            RectTransform arrowRect = (RectTransform)arrowObject.transform;
+            arrowRect.anchorMin = Vector2.zero; arrowRect.anchorMax = Vector2.one;
+            arrowRect.offsetMin = new Vector2(22f, 12f); arrowRect.offsetMax = new Vector2(-22f, -12f);
+            FloodLearningUIStyle.ApplyArrow(arrowObject.GetComponent<Image>(), numberUp);
+        }
+        else
+            TextOnButton(label, obj.transform, fontSize);
         return button;
     }
 
