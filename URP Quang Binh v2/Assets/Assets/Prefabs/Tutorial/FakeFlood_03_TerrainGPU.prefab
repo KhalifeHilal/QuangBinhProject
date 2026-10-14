@@ -65,7 +65,7 @@ MonoBehaviour:
   obstacleScanHeight: 0.6
   minimumObstacleHeight: 0.04
   obstacleRefreshInterval: 0.75
-  referenceRiverName: SM_Tutorial_River_01
+  referenceRiverName: SM_Tutorial_Terrain_01
   riverHalfWidth: 0.09
   riverDepth: 0.035
   riverInflow: 1.4
