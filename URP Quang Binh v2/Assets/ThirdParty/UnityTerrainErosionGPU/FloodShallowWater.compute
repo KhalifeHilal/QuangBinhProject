@@ -2,15 +2,21 @@
 #pragma kernel AddWater
 #pragma kernel ComputeFlux
 #pragma kernel ApplyFlux
+#pragma kernel UpdateVelocity
 
 RWTexture2D<float4> StateMap;
 RWTexture2D<float4> FluxMap;
+RWTexture2D<float2> VelocityMap;
 Texture2D<float> ObstacleMap;
 Texture2D<float> RiverMask;
 uint _Width, _Height;
 float _DeltaTime, _Gravity, _PipeArea, _PipeLength, _CellArea, _RainRate, _Evaporation, _MaximumWater;
+float _DryThreshold, _MaximumVelocity;
+float2 _CellSize;
 float _RiverCenter, _RiverHalfWidth, _RiverDepth, _RiverInflow;
 int _VisibleLeftStartReservoir;
+int _OneWayFlow;
+int _OpenDownstreamBoundary;
 
 uint2 ClampCell(int2 p) { return (uint2)clamp(p, int2(0,0), int2((int)_Width-1,(int)_Height-1)); }
 float FullHeight(int2 p) { float4 s = StateMap[ClampCell(p)]; return s.r + s.g; }
@@ -20,7 +26,7 @@ bool IsBlocked(int2 p) { return ObstacleMap[ClampCell(p)] > 0.5; }
 void Initialize(uint3 id : SV_DispatchThreadID)
 {
     if (id.x >= _Width || id.y >= _Height) return;
-    if (IsBlocked(id.xy)) { StateMap[id.xy] = float4(0.16, 0, 0, 1); FluxMap[id.xy] = 0; return; }
+    if (IsBlocked(id.xy)) { StateMap[id.xy] = float4(0.16, 0, 0, 1); FluxMap[id.xy] = 0; VelocityMap[id.xy] = 0; return; }
     float2 uv = (id.xy + 0.5) / float2(_Width, _Height);
     float inRiver = RiverMask[id.xy];
     // A deeper channel follows the visible river. It fills first and only starts
@@ -32,13 +38,14 @@ void Initialize(uint3 id : SV_DispatchThreadID)
     float water = _VisibleLeftStartReservoir != 0 ? 0.18 * inRiver * visibleLeftReservoir : 0.0;
     StateMap[id.xy] = float4(terrain, water, 0, 1);
     FluxMap[id.xy] = 0;
+    VelocityMap[id.xy] = 0;
 }
 
 [numthreads(8,8,1)]
 void AddWater(uint3 id : SV_DispatchThreadID)
 {
     if (id.x >= _Width || id.y >= _Height) return;
-    if (IsBlocked(id.xy)) { float4 blockedState = StateMap[id.xy]; blockedState.g = 0; StateMap[id.xy] = blockedState; return; }
+    if (IsBlocked(id.xy)) { float4 blockedState = StateMap[id.xy]; blockedState.g = 0; StateMap[id.xy] = blockedState; VelocityMap[id.xy] = 0; return; }
     float4 state = StateMap[id.xy];
     float2 uv = (id.xy + 0.5) / float2(_Width, _Height);
     float riverMask = RiverMask[id.xy];
@@ -58,19 +65,22 @@ void AddWater(uint3 id : SV_DispatchThreadID)
 void ComputeFlux(uint3 id : SV_DispatchThreadID)
 {
     if (id.x >= _Width || id.y >= _Height) return;
-    if (IsBlocked(id.xy)) { FluxMap[id.xy] = 0; return; }
+    if (IsBlocked(id.xy)) { FluxMap[id.xy] = 0; VelocityMap[id.xy] = 0; return; }
     int2 p = int2(id.xy);
     float4 state = StateMap[id.xy];
     float total = state.r + state.g;
     float4 difference = total - float4(FullHeight(p+int2(-1,0)), FullHeight(p+int2(1,0)),
                                       FullHeight(p+int2(0,1)), FullHeight(p+int2(0,-1)));
-    float4 flux = max(0, FluxMap[id.xy] + _DeltaTime * _Gravity * _PipeArea * difference / _PipeLength);
-    // Scenario flow is one-way: water may travel only from world-left towards +X.
-    // Suppressing the -X channel prevents pressure reflections from looking like
-    // a second flood source entering from the right side.
-    flux.x = 0;
+    // Conservative pipe flux from the project-paper formulation:
+    // f(t+dt) = max(0, f(t) + dt*g*A*(eta-eta_neighbour)/L).
+    float4 flux = max(0, FluxMap[id.xy] + _DeltaTime * _Gravity * _PipeArea * difference / max(_PipeLength, 1e-6));
+    if (_OneWayFlow != 0) flux.x = 0;
+
     float sumFlux = flux.x + flux.y + flux.z + flux.w;
-    if (sumFlux > 0) flux *= min(1.0, state.g * _CellArea / (sumFlux * _DeltaTime));
+    if (sumFlux > 1e-8 && state.g > _DryThreshold)
+        flux *= min(1.0, state.g * _CellArea / (sumFlux * _DeltaTime));
+    else if (state.g <= _DryThreshold)
+        flux = 0;
     if (id.x == 0) flux.x = 0;
     if (id.x == _Width-1) flux.y = 0;
     if (id.y == _Height-1) flux.z = 0;
@@ -89,14 +99,49 @@ void ApplyFlux(uint3 id : SV_DispatchThreadID)
     if (IsBlocked(id.xy)) { float4 blockedState = StateMap[id.xy]; blockedState.g = 0; StateMap[id.xy] = blockedState; return; }
     int2 p = int2(id.xy);
     float4 outgoing = FluxMap[id.xy];
-    // Strictly one-way on X: receive water from the left, never from the right.
+    // Incoming volume is the opposite channel of each neighbour. This is the
+    // mass-conserving FluxApply step used by the paper's reference model.
     float incoming = FluxMap[ClampCell(p+int2(-1,0))].y
+                   + FluxMap[ClampCell(p+int2(1,0))].x
                    + FluxMap[ClampCell(p+int2(0,1))].w + FluxMap[ClampCell(p+int2(0,-1))].z;
     float4 state = StateMap[id.xy];
-    state.g = clamp((state.g + _DeltaTime * (incoming-outgoing.x-outgoing.y-outgoing.z-outgoing.w) / _CellArea)
+    float volumeDelta = incoming - outgoing.x-outgoing.y-outgoing.z-outgoing.w;
+    state.g = clamp((state.g + _DeltaTime * volumeDelta / max(_CellArea, 1e-6))
                      * (1.0 - _Evaporation * _DeltaTime), 0, _MaximumWater);
-    // Open downstream boundary: water reaching the right outlet leaves the map
-    // instead of pooling there and appearing to flood back in from the right.
-    if (id.x >= _Width - 2) state.g = 0;
+    if (state.g <= _DryThreshold) state.g = 0;
+    // Closed downstream boundary: water reaching the end of the river remains
+    // in the last cells and rises. Enable the optional open boundary only when
+    // the scenario should let water leave the simulation tile.
+    if (_OpenDownstreamBoundary != 0 && id.x >= _Width - 2) state.g = 0;
     StateMap[id.xy] = state;
+
+    float meanDepth = max(state.g, _DryThreshold);
+    float flowX = FluxMap[ClampCell(p+int2(-1,0))].y - FluxMap[ClampCell(p+int2(1,0))].x;
+    float flowZ = FluxMap[ClampCell(p+int2(0,1))].w - FluxMap[ClampCell(p+int2(0,-1))].z;
+    VelocityMap[id.xy] = float2(flowX / max(meanDepth * _CellSize.y, 1e-6),
+                                flowZ / max(meanDepth * _CellSize.x, 1e-6));
+}
+
+[numthreads(8,8,1)]
+void UpdateVelocity(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= _Width || id.y >= _Height) return;
+    if (IsBlocked(id.xy)) { VelocityMap[id.xy] = 0; return; }
+    int2 p = int2(id.xy);
+    if (StateMap[id.xy].g <= _DryThreshold) { VelocityMap[id.xy] = 0; return; }
+
+    // SWE momentum step: v(n+1) = v(n) - g * grad(eta) * dt.
+    float etaL = FullHeight(p + int2(-1,0));
+    float etaR = FullHeight(p + int2(1,0));
+    float etaB = FullHeight(p + int2(0,-1));
+    float etaT = FullHeight(p + int2(0,1));
+    float2 gradient = float2((etaR - etaL) / max(2.0 * _CellSize.x, 1e-6),
+                             (etaT - etaB) / max(2.0 * _CellSize.y, 1e-6));
+    float2 velocity = VelocityMap[id.xy] - _Gravity * gradient * _DeltaTime;
+    if (IsBlocked(p + int2(-1,0)) || IsBlocked(p + int2(1,0))) velocity.x = 0;
+    if (IsBlocked(p + int2(0,-1)) || IsBlocked(p + int2(0,1))) velocity.y = 0;
+    if (_OneWayFlow != 0) velocity.x = max(0, velocity.x);
+    float speed = length(velocity);
+    if (speed > _MaximumVelocity) velocity *= _MaximumVelocity / max(speed, 1e-6);
+    VelocityMap[id.xy] = velocity;
 }

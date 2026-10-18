@@ -47,14 +47,20 @@ MonoBehaviour:
   computeShader: {fileID: 7200000, guid: 64bfb4537b124501997541f3d958971a, type: 3}
   terrainShader: {fileID: 4800000, guid: a0a676bddb9147d8902cdcca6f754d16, type: 3}
   waterShader: {fileID: 4800000, guid: aae123c6a54741dc94dba4c05526508c, type: 3}
-  resolution: 128
+  resolution: 256
   meshResolution: 64
   worldSize: {x: 1.65, y: 1.35}
   heightScale: 0.12
-  timeScale: 0.12
+  timeScale: 0.48
+  gravity: 9.81
+  courantNumber: 0.45
+  pipeArea: 0.002
+  dryThreshold: 0.00001
+  oneWayFlow: 1
+  openDownstreamBoundary: 0
   rainRate: 0
   evaporation: 0.004
-  maximumWater: 0.8
+  maximumWater: 15
   renderSimulationTerrain: 0
   fitToReferenceTerrain: 1
   referenceTerrainName: SM_Tutorial_Terrain_01
@@ -65,10 +71,11 @@ MonoBehaviour:
   obstacleScanHeight: 0.6
   minimumObstacleHeight: 0.04
   obstacleRefreshInterval: 0.75
-  referenceRiverName: SM_Tutorial_Terrain_01
+  addMissingTerrainColliders: 1
+  referenceRiverName: SM_Tutorial_River_01
   riverHalfWidth: 0.09
-  riverDepth: 0.035
-  riverInflow: 1.4
+  riverDepth: 0.05
+  riverInflow: 9
   visibleLeftStartReservoir: 0
   simulationYaw: 0
   waterColor: {r: 0.015, g: 0.25, b: 0.72, a: 0.78}

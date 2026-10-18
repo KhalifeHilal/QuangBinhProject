@@ -1,4 +1,6 @@
-// Adapted from bshishov/UnityTerrainErosionGPU (MIT): shallow-water pipe model.
+// Project-paper flood solver: conservative shallow-water fluxes on a GPU grid,
+// adaptive CFL substeps, dry-cell handling, and a SWE pressure velocity step.
+// The original pipe-flux reference is credited in the repository documentation.
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.SceneManagement;
@@ -12,10 +14,21 @@ public sealed class TerrainFloodSimulation : MonoBehaviour
     [Range(16, 128)] public int meshResolution = 64;
     public Vector2 worldSize = new Vector2(1.65f, 1.35f);
     public float heightScale = 0.12f;
-    public float timeScale = 0.12f;
+    // Four-times faster scenario playback than the original 0.12 setting.
+    public float timeScale = 0.48f;
+    [Min(0.1f)] public float gravity = 9.81f;
+    [Range(0.05f, 0.9f)] public float courantNumber = 0.45f;
+    [Tooltip("Pipe cross-section A in the paper's conservative flux equation.")]
+    public float pipeArea = 0.0007f;
+    [Min(0f)] public float dryThreshold = 0.00001f;
+    [Tooltip("Keep scenario flow directed from the left. Disable for the full four-way equation.")]
+    public bool oneWayFlow = true;
+    [Tooltip("Let water leave through the right edge. Disable to make the river end act as a closed basin where the level rises.")]
+    public bool openDownstreamBoundary = false;
     public float rainRate = 0f;
     public float evaporation = 0.004f;
-    public float maximumWater = 0.42f;
+    // Maximum water depth in metres. This is intentionally high enough for overtopping.
+    public float maximumWater = 15f;
     public bool renderSimulationTerrain = false;
     [Header("Terrain fitting")]
     public bool fitToReferenceTerrain = true;
@@ -26,11 +39,15 @@ public sealed class TerrainFloodSimulation : MonoBehaviour
     public float obstacleScanHeight = 2f;
     public float minimumObstacleHeight = 0.04f;
     public float obstacleRefreshInterval = 0.75f;
+    [Header("Terrain collision")]
+    [Tooltip("Adds non-trigger MeshColliders to reference-terrain meshes that do not have one.")]
+    public bool addMissingTerrainColliders = true;
     [Header("River flooding")]
     public string referenceRiverName = "SM_Tutorial_River_01";
     [Range(0.02f, 0.3f)] public float riverHalfWidth = 0.09f;
-    [Range(0.02f, 0.25f)] public float riverDepth = 0.10f;
-    public float riverInflow = 0.9f;
+    // Keep the channel shallow enough that the increased level can spill onto terrain.
+    [Range(0.02f, 0.25f)] public float riverDepth = 0.025f;
+    public float riverInflow = 9f;
     public bool visibleLeftStartReservoir;
     [Tooltip("Rotation of the flood grid on the map. 90 degrees moves the former top entrance to the left.")]
     public float simulationYaw = 0f;
@@ -38,12 +55,13 @@ public sealed class TerrainFloodSimulation : MonoBehaviour
 
     RenderTexture state;
     RenderTexture flux;
+    RenderTexture velocity;
     Texture2D obstacleMask;
     Texture2D riverMask;
     Material terrainMaterial;
     Material waterMaterial;
     Mesh mesh;
-    int initializeKernel, waterKernel, fluxKernel, applyKernel;
+    int initializeKernel, waterKernel, fluxKernel, applyKernel, velocityKernel;
     bool running;
     float nextObstacleRefresh;
     int lastObstacleCount = -1;
@@ -56,6 +74,7 @@ public sealed class TerrainFloodSimulation : MonoBehaviour
             return;
         }
         if (fitToReferenceTerrain) FitToReferenceTerrain();
+        if (addMissingTerrainColliders) EnsureReferenceTerrainColliders();
         CreateResources();
         Dispatch(initializeKernel);
         running = true;
@@ -64,14 +83,25 @@ public sealed class TerrainFloodSimulation : MonoBehaviour
     void FixedUpdate()
     {
         if (!running) return;
-        float dt = Mathf.Min(Time.fixedDeltaTime * timeScale, 0.012f);
+        Vector2 cellSize = worldSize / Mathf.Max(1, resolution);
+        float waveSpeed = Mathf.Sqrt(Mathf.Max(0.001f, gravity * Mathf.Max(maximumWater, riverDepth)));
+        float stableDt = courantNumber * Mathf.Min(cellSize.x, cellSize.y) / Mathf.Max(0.1f, waveSpeed);
+        float frameDt = Mathf.Max(0f, Time.fixedDeltaTime * timeScale);
+        // Keep enough CFL substeps when the accelerated playback clock is used.
+        int substeps = Mathf.Clamp(Mathf.CeilToInt(frameDt / Mathf.Max(stableDt, 0.00001f)), 1, 32);
+        float dt = frameDt / substeps;
         computeShader.SetFloat("_DeltaTime", dt);
         computeShader.SetFloat("_RainRate", rainRate);
         computeShader.SetFloat("_Evaporation", evaporation);
         if (Time.time >= nextObstacleRefresh) RefreshColliderObstacles();
-        Dispatch(waterKernel);
-        Dispatch(fluxKernel);
-        Dispatch(applyKernel);
+        computeShader.SetFloat("_MaximumVelocity", Mathf.Min(cellSize.x, cellSize.y) / Mathf.Max(dt, 0.00001f) * courantNumber);
+        for (int i = 0; i < substeps; i++)
+        {
+            Dispatch(waterKernel);
+            Dispatch(fluxKernel);
+            Dispatch(applyKernel);
+            Dispatch(velocityKernel);
+        }
     }
 
     public void StopSimulation() => running = false;
@@ -82,6 +112,7 @@ public sealed class TerrainFloodSimulation : MonoBehaviour
         resolution = Mathf.CeilToInt(resolution / 8f) * 8;
         state = CreateTexture(RenderTextureFormat.ARGBFloat, FilterMode.Bilinear, "Flood State");
         flux = CreateTexture(RenderTextureFormat.ARGBFloat, FilterMode.Point, "Flood Flux");
+        velocity = CreateTexture(RenderTextureFormat.RGFloat, FilterMode.Point, "Flood Velocity");
         obstacleMask = new Texture2D(resolution, resolution, TextureFormat.R8, false, true)
         { name = "Flood Collider Obstacles", filterMode = FilterMode.Point, wrapMode = TextureWrapMode.Clamp };
         RefreshColliderObstacles();
@@ -90,19 +121,26 @@ public sealed class TerrainFloodSimulation : MonoBehaviour
         waterKernel = computeShader.FindKernel("AddWater");
         fluxKernel = computeShader.FindKernel("ComputeFlux");
         applyKernel = computeShader.FindKernel("ApplyFlux");
-        foreach (int kernel in new[] { initializeKernel, waterKernel, fluxKernel, applyKernel })
+        velocityKernel = computeShader.FindKernel("UpdateVelocity");
+        foreach (int kernel in new[] { initializeKernel, waterKernel, fluxKernel, applyKernel, velocityKernel })
         {
             computeShader.SetTexture(kernel, "StateMap", state);
             computeShader.SetTexture(kernel, "FluxMap", flux);
+            computeShader.SetTexture(kernel, "VelocityMap", velocity);
             computeShader.SetTexture(kernel, "ObstacleMap", obstacleMask);
             computeShader.SetTexture(kernel, "RiverMask", riverMask);
         }
         computeShader.SetInt("_Width", resolution);
         computeShader.SetInt("_Height", resolution);
-        computeShader.SetFloat("_Gravity", 9.81f);
-        computeShader.SetFloat("_PipeArea", 0.0007f);
-        computeShader.SetFloat("_PipeLength", 1f / resolution);
-        computeShader.SetFloat("_CellArea", 1f / (resolution * resolution));
+        Vector2 cellSize = worldSize / Mathf.Max(1, resolution);
+        computeShader.SetFloat("_Gravity", gravity);
+        computeShader.SetFloat("_PipeArea", pipeArea);
+        computeShader.SetFloat("_PipeLength", Mathf.Min(cellSize.x, cellSize.y));
+        computeShader.SetFloat("_CellArea", cellSize.x * cellSize.y);
+        computeShader.SetVector("_CellSize", cellSize);
+        computeShader.SetFloat("_DryThreshold", dryThreshold);
+        computeShader.SetInt("_OneWayFlow", oneWayFlow ? 1 : 0);
+        computeShader.SetInt("_OpenDownstreamBoundary", openDownstreamBoundary ? 1 : 0);
         computeShader.SetFloat("_MaximumWater", maximumWater);
         ConfigureRiverSource();
 
@@ -244,6 +282,23 @@ public sealed class TerrainFloodSimulation : MonoBehaviour
         material.SetFloat("_HeightScale", heightScale);
     }
 
+    void EnsureReferenceTerrainColliders()
+    {
+        Transform reference = FindSceneTransform(referenceTerrainName);
+        if (reference == null) return;
+
+        foreach (MeshFilter filter in reference.GetComponentsInChildren<MeshFilter>(true))
+        {
+            if (filter.sharedMesh == null) continue;
+            MeshCollider collider = filter.GetComponent<MeshCollider>();
+            if (collider == null) collider = filter.gameObject.AddComponent<MeshCollider>();
+            collider.sharedMesh = filter.sharedMesh;
+            collider.convex = false;
+            collider.isTrigger = false;
+            collider.enabled = true;
+        }
+    }
+
     void CreateSurface(string objectName, Material material, float yOffset)
     {
         GameObject surface = new GameObject(objectName, typeof(MeshFilter), typeof(MeshRenderer));
@@ -348,11 +403,12 @@ public sealed class TerrainFloodSimulation : MonoBehaviour
         running = false;
         if (state != null) { state.Release(); Destroy(state); }
         if (flux != null) { flux.Release(); Destroy(flux); }
+        if (velocity != null) { velocity.Release(); Destroy(velocity); }
         if (obstacleMask != null) Destroy(obstacleMask);
         if (riverMask != null) Destroy(riverMask);
         if (terrainMaterial != null) Destroy(terrainMaterial);
         if (waterMaterial != null) Destroy(waterMaterial);
         if (mesh != null) Destroy(mesh);
-        state = null; flux = null; obstacleMask = null;
+        state = null; flux = null; velocity = null; obstacleMask = null;
     }
 }
