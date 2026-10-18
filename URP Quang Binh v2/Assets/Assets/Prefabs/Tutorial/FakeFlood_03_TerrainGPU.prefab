@@ -56,8 +56,8 @@ MonoBehaviour:
   courantNumber: 0.45
   pipeArea: 0.002
   dryThreshold: 0.00001
-  oneWayFlow: 1
-  openDownstreamBoundary: 0
+  oneWayFlow: 0
+  openDownstreamBoundary: 1
   rainRate: 0
   evaporation: 0.004
   maximumWater: 15
@@ -76,6 +76,58 @@ MonoBehaviour:
   riverHalfWidth: 0.09
   riverDepth: 0.05
   riverInflow: 9
+  floodSourceMode: 0
+  pointSourceUV: {x: 0.25, y: 0.45}
+  pointSourceRadius: 0.045
+  inflowMultiplierOverTime:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 120
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  rainMultiplierOverTime:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 120
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  carveRiverIntoTerrain: 0
   visibleLeftStartReservoir: 0
   simulationYaw: 0
   waterColor: {r: 0.015, g: 0.25, b: 0.72, a: 0.78}
