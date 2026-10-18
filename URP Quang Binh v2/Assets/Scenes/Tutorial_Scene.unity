@@ -8357,6 +8357,7 @@ MonoBehaviour:
   perMultiplier: 0.02
   heightDivision: 6
   scaleMultiplier: 0.008
+  footEmbedDepth: 0.125
   dykeToDestroy: {fileID: 1607946540}
   freePlacement: 0
   dykeBuilt: 0

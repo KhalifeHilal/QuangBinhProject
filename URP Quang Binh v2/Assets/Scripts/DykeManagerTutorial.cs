@@ -20,6 +20,9 @@ public class DykeManagerTutorial : MonoBehaviour
     [SerializeField] float perMultiplier = 0.1f;
     [SerializeField] int heightDivision = 10;
     [SerializeField] float scaleMultiplier = 0.1f;
+    [Header("Terrain fitting")]
+    [Tooltip("Minimum burial depth for the lowest points/feet of a constructed dyke.")]
+    [Min(0f)] [SerializeField] float footEmbedDepth = 0.03f;
     [SerializeField] GameObject dykeToDestroy;
 
     [Header("Scenario placement")]
@@ -38,6 +41,7 @@ public class DykeManagerTutorial : MonoBehaviour
     Dictionary<GameObject, Material> selectedHoveringDykes;
     InputAction scenarioGrip;
     Transform placementTerrain;
+    Transform placementRiver;
     Renderer placementTerrainRenderer;
     GameObject placementMarker;
     A1P1ScenarioDyke hoveredScenarioDyke;
@@ -119,7 +123,7 @@ public class DykeManagerTutorial : MonoBehaviour
 
     void UpdatePlacementMarker()
     {
-        if (!freePlacement || !rightXRRayInteractor.TryGetCurrent3DRaycastHit(out RaycastHit hit) || !IsTerrainHit(hit))
+        if (!freePlacement || !TryGetPlacementTerrainHit(out RaycastHit hit))
         {
             if (placementMarker != null) placementMarker.SetActive(false);
             return;
@@ -157,6 +161,20 @@ public class DykeManagerTutorial : MonoBehaviour
         }
         if (placementTerrain == null || hit.collider == null) return false;
         Transform hitTransform = hit.collider.transform;
+
+        // The river surface can be inside the terrain prefab hierarchy. It is
+        // a visual water plane, not a valid dyke foundation, so reject it
+        // before accepting the broader terrain hierarchy test below.
+        if (placementRiver == null)
+        {
+            foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+            foreach (Transform child in root.GetComponentsInChildren<Transform>(true))
+                if (child.name == "SM_Tutorial_River_01") { placementRiver = child; break; }
+        }
+        if (placementRiver != null &&
+            (hitTransform == placementRiver || hitTransform.IsChildOf(placementRiver)))
+            return false;
+
         if (hitTransform == placementTerrain || hitTransform.IsChildOf(placementTerrain) || placementTerrain.IsChildOf(hitTransform))
             return true;
 
@@ -169,6 +187,28 @@ public class DykeManagerTutorial : MonoBehaviour
         return hit.point.x >= bounds.min.x && hit.point.x <= bounds.max.x &&
                hit.point.z >= bounds.min.z && hit.point.z <= bounds.max.z &&
                hit.point.y <= bounds.max.y + heightTolerance && hit.normal.y > .35f;
+    }
+
+    bool TryGetPlacementTerrainHit(out RaycastHit terrainHit)
+    {
+        terrainHit = default;
+        if (rightXRRayInteractor == null || rightXRRayInteractor.rayOriginTransform == null) return false;
+
+        if (!freePlacement)
+            return rightXRRayInteractor.TryGetCurrent3DRaycastHit(out terrainHit);
+
+        Transform origin = rightXRRayInteractor.rayOriginTransform;
+        RaycastHit[] hits = Physics.RaycastAll(origin.position, origin.forward, 100f, ~0, QueryTriggerInteraction.Ignore);
+        float closestDistance = float.MaxValue;
+        bool found = false;
+        foreach (RaycastHit hit in hits)
+        {
+            if (hit.distance >= closestDistance || !IsTerrainHit(hit)) continue;
+            closestDistance = hit.distance;
+            terrainHit = hit;
+            found = true;
+        }
+        return found;
     }
 
     void ProcessFreePlacementGrip()
@@ -189,9 +229,9 @@ public class DykeManagerTutorial : MonoBehaviour
             if (!inTriggerPress)
             {
                 inTriggerPress = true;
-                if (rightXRRayInteractor.TryGetCurrent3DRaycastHit(out RaycastHit raycastHit))
+                if (TryGetPlacementTerrainHit(out RaycastHit raycastHit))
                 {
-                    if ((freePlacement && IsTerrainHit(raycastHit)) || (!freePlacement && snapPoints.Contains(raycastHit.collider)))
+                    if (freePlacement || snapPoints.Contains(raycastHit.collider))
                     {
                         startCollider = raycastHit.collider;
                         startPoint = freePlacement ? raycastHit.point : startCollider.transform.position;
@@ -213,9 +253,9 @@ public class DykeManagerTutorial : MonoBehaviour
             if (inTriggerPress)
             {
                 inTriggerPress = false;
-                if (rightXRRayInteractor.TryGetCurrent3DRaycastHit(out RaycastHit raycastHit))
+                if (TryGetPlacementTerrainHit(out RaycastHit raycastHit))
                 {
-                    bool validEndPoint = (freePlacement && IsTerrainHit(raycastHit)) ||
+                    bool validEndPoint = (freePlacement) ||
                         (!freePlacement && snapPoints.Contains(raycastHit.collider) && raycastHit.collider != startCollider);
                     if (validEndPoint)
                     {
@@ -234,13 +274,8 @@ public class DykeManagerTutorial : MonoBehaviour
             polyGen = PolygonGenerator.GetInstance();
         }
 
-        if (rightXRRayInteractor.TryGetCurrent3DRaycastHit(out RaycastHit raycastHit))
+        if (TryGetPlacementTerrainHit(out RaycastHit raycastHit))
         {
-            if (freePlacement && !IsTerrainHit(raycastHit))
-            {
-                if (futureDyke != null) { Destroy(futureDyke); futureDyke = null; }
-                return;
-            }
             if (futureDyke != null)
             {
                 DestroyImmediate(futureDyke);
@@ -260,6 +295,17 @@ public class DykeManagerTutorial : MonoBehaviour
 
 
             futureDyke = polyGen.GeneratePolygons(false, "FutureDyke", pts, propFutureDike, heightDivision);
+            if (futureDyke != null)
+            {
+                // PolygonGenerator creates the preview mesh in the X/Z plane
+                // at world Y=0. Move its base onto the terrain hit height so
+                // the yellow/green hover effect is not left on the lower river
+                // plane. Use the lower endpoint so the preview never floats
+                // above either terrain contact.
+                Vector3 previewPosition = futureDyke.transform.position;
+                previewPosition.y = Mathf.Min(startPoint.y, _endPoint.y) + 0.005f;
+                futureDyke.transform.position = previewPosition;
+            }
         }
     }
 
@@ -268,13 +314,26 @@ public class DykeManagerTutorial : MonoBehaviour
         GameObject dyke = Instantiate(dykePrefab, transform);
         dyke.transform.position = (startPoint + endPoint) / 2;
 
-        Vector3 direction = endPoint - startPoint;
-        direction.y = 0;
-        Quaternion quaternion = Quaternion.LookRotation(direction, Vector3.up);
+        Vector3 fullDirection = endPoint - startPoint;
+        Vector3 horizontalDirection = new Vector3(fullDirection.x, 0f, fullDirection.z);
+        float horizontalDistance = horizontalDirection.magnitude;
+        if (horizontalDistance < 0.0001f)
+        {
+            Destroy(dyke);
+            return;
+        }
+
+        // Follow the terrain slope, but do not count the height difference as
+        // additional dyke length. The previous Vector3.Distance() made a dyke
+        // appear oversized when its endpoints were at different elevations.
+        Quaternion quaternion = Quaternion.LookRotation(fullDirection.normalized, Vector3.up);
         dyke.transform.rotation = quaternion;
 
-        float distance = Vector3.Distance(startPoint, endPoint);
-        dyke.transform.localScale = new Vector3(dyke.transform.localScale.x * scaleMultiplier, dyke.transform.localScale.y * scaleMultiplier, distance / 36);
+        dyke.transform.localScale = new Vector3(
+            dyke.transform.localScale.x * scaleMultiplier,
+            dyke.transform.localScale.y * scaleMultiplier,
+            horizontalDistance / 36f);
+        BuryDykeFeet(dyke, Mathf.Min(startPoint.y, endPoint.y) - footEmbedDepth);
 
         if (freePlacement)
         {
@@ -285,6 +344,25 @@ public class DykeManagerTutorial : MonoBehaviour
         // AddInteraction(dyke);
 
         dykeBuilt++;
+    }
+
+    void BuryDykeFeet(GameObject dyke, float targetLowestWorldY)
+    {
+        if (dyke == null) return;
+        Renderer[] renderers = dyke.GetComponentsInChildren<Renderer>(true);
+        if (renderers.Length == 0) return;
+
+        float lowestWorldY = float.PositiveInfinity;
+        foreach (Renderer renderer in renderers)
+        {
+            if (renderer != null) lowestWorldY = Mathf.Min(lowestWorldY, renderer.bounds.min.y);
+        }
+        if (float.IsPositiveInfinity(lowestWorldY)) return;
+
+        // Only move down. If the prefab already reaches below the terrain, do
+        // not lift it and expose the feet again.
+        if (lowestWorldY > targetLowestWorldY)
+            dyke.transform.position += Vector3.up * (targetLowestWorldY - lowestWorldY);
     }
 
     static void AddMeshColliders(GameObject dyke)

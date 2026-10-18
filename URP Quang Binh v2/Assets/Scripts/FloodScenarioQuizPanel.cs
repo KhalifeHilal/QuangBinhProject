@@ -251,7 +251,7 @@ static class FloodScenarioOverlay
     public static GameObject ShowWaterDirectionArrow()
     {
         GameObject root = CreateCanvas("A1_P1_WaterDirection", new Vector2(760, 180), .0013f);
-        TMP_Text text = FloodLearningUI.Text("Arrow", root.transform, "WATER FROM LEFT   >>>", 46,
+        TMP_Text text = FloodLearningUI.Text("Arrow", root.transform, "WATER FROM LEFT", 46,
             FontStyles.Bold, -25, 115, TextAlignmentOptions.Center, 25);
         text.color = new Color(.2f, .75f, 1f);
 

@@ -169,9 +169,12 @@ public static class FloodLearningUIStyle
         for (int y = 0; y < size; y++)
         for (int x = 0; x < size; x++)
         {
-            // The narrow end is the point of the arrow.  For an up arrow it
-            // must be at the top; for a down arrow it must be at the bottom.
-            float progress = pointsUp ? y / (float)(size - 1) : (size - 1 - y) / (float)(size - 1);
+            // Texture pixels use a bottom-left origin in Unity. Therefore an
+            // up arrow gets its narrow point at the largest y value, while a
+            // down arrow gets its narrow point at the smallest one.
+            float progress = pointsUp
+                ? (size - 1 - y) / (float)(size - 1)
+                : y / (float)(size - 1);
             float halfWidth = progress * (size * .42f);
             bool inside = Mathf.Abs(x - center) <= halfWidth;
             pixels[y * size + x] = inside ? new Color32(255, 255, 255, 255) : new Color32(255, 255, 255, 0);
