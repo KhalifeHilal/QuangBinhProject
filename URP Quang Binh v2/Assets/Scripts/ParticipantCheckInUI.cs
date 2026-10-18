@@ -189,16 +189,18 @@ public sealed class ParticipantCheckInUI : MonoBehaviour
     {
         bool numberUp = action != null && action.Method != null && action.Method.Name == nameof(ChangeNumberUp);
         bool numberDown = action != null && action.Method != null && action.Method.Name == nameof(ChangeNumberDown);
-        // Keep both number arrows beside the value, even if their label was imported with bad encoding.
+        // Keep both number arrows below the value, even if their label was imported with bad encoding.
         if (numberUp || numberDown)
         {
             if (numberUp)
             {
-                label = ""; top = -175f; x = 220f; width = 90f; fontSize = 30f;
+                // Right arrow increments the participant number.
+                label = ""; top = -305f; x = 120f; width = 90f; fontSize = 30f;
             }
             else if (numberDown)
             {
-                label = ""; top = -270f; x = 220f; width = 90f; fontSize = 30f;
+                // Left arrow decrements the participant number.
+                label = ""; top = -305f; x = -120f; width = 90f; fontSize = 30f;
             }
         }
         // Repair the two legacy arrow labels if the source file was imported with UTF-8 mojibake.
@@ -226,7 +228,8 @@ public sealed class ParticipantCheckInUI : MonoBehaviour
             RectTransform arrowRect = (RectTransform)arrowObject.transform;
             arrowRect.anchorMin = Vector2.zero; arrowRect.anchorMax = Vector2.one;
             arrowRect.offsetMin = new Vector2(22f, 12f); arrowRect.offsetMax = new Vector2(-22f, -12f);
-            FloodLearningUIStyle.ApplyArrow(arrowObject.GetComponent<Image>(), numberUp);
+            FloodLearningUIStyle.ApplyArrow(arrowObject.GetComponent<Image>(),
+                numberUp ? FloodLearningUIStyle.ArrowDirection.Right : FloodLearningUIStyle.ArrowDirection.Left);
         }
         else
             TextOnButton(label, obj.transform, fontSize);

@@ -10,6 +10,8 @@ public static class FloodLearningUIStyle
     static Sprite roundedSprite;
     static Sprite arrowUpSprite;
     static Sprite arrowDownSprite;
+    static Sprite arrowLeftSprite;
+    static Sprite arrowRightSprite;
     static TMP_FontAsset cachedFont;
     static TMP_FontAsset cachedMediumFont;
     static int normalizedSceneHandle = -1;
@@ -43,10 +45,18 @@ public static class FloodLearningUIStyle
         image.color = color;
     }
 
-    public static void ApplyArrow(Image image, bool pointsUp)
+    public enum ArrowDirection { Up, Down, Left, Right }
+
+    public static void ApplyArrow(Image image, ArrowDirection direction)
     {
         if (image == null) return;
-        image.sprite = pointsUp ? ArrowUpSprite : ArrowDownSprite;
+        image.sprite = direction switch
+        {
+            ArrowDirection.Left => ArrowLeftSprite,
+            ArrowDirection.Right => ArrowRightSprite,
+            ArrowDirection.Down => ArrowDownSprite,
+            _ => ArrowUpSprite
+        };
         image.type = Image.Type.Simple;
         image.preserveAspect = true;
         image.color = Color.white;
@@ -151,15 +161,17 @@ public static class FloodLearningUIStyle
         }
     }
 
-    static Sprite ArrowUpSprite => arrowUpSprite != null ? arrowUpSprite : (arrowUpSprite = CreateArrowSprite(true));
-    static Sprite ArrowDownSprite => arrowDownSprite != null ? arrowDownSprite : (arrowDownSprite = CreateArrowSprite(false));
+    static Sprite ArrowUpSprite => arrowUpSprite != null ? arrowUpSprite : (arrowUpSprite = CreateArrowSprite(ArrowDirection.Up));
+    static Sprite ArrowDownSprite => arrowDownSprite != null ? arrowDownSprite : (arrowDownSprite = CreateArrowSprite(ArrowDirection.Down));
+    static Sprite ArrowLeftSprite => arrowLeftSprite != null ? arrowLeftSprite : (arrowLeftSprite = CreateArrowSprite(ArrowDirection.Left));
+    static Sprite ArrowRightSprite => arrowRightSprite != null ? arrowRightSprite : (arrowRightSprite = CreateArrowSprite(ArrowDirection.Right));
 
-    static Sprite CreateArrowSprite(bool pointsUp)
+    static Sprite CreateArrowSprite(ArrowDirection direction)
     {
         const int size = 48;
         Texture2D texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
         {
-            name = pointsUp ? "FloodLearningUI_ArrowUpTexture" : "FloodLearningUI_ArrowDownTexture",
+            name = $"FloodLearningUI_Arrow{direction}Texture",
             filterMode = FilterMode.Bilinear,
             wrapMode = TextureWrapMode.Clamp,
             hideFlags = HideFlags.HideAndDontSave
@@ -169,20 +181,38 @@ public static class FloodLearningUIStyle
         for (int y = 0; y < size; y++)
         for (int x = 0; x < size; x++)
         {
-            // Texture pixels use a bottom-left origin in Unity. Therefore an
-            // up arrow gets its narrow point at the largest y value, while a
-            // down arrow gets its narrow point at the smallest one.
-            float progress = pointsUp
-                ? (size - 1 - y) / (float)(size - 1)
-                : y / (float)(size - 1);
-            float halfWidth = progress * (size * .42f);
-            bool inside = Mathf.Abs(x - center) <= halfWidth;
-            pixels[y * size + x] = inside ? new Color32(255, 255, 255, 255) : new Color32(255, 255, 255, 0);
+            // Texture pixels use a bottom-left origin in Unity. The narrow
+            // end is the arrow tip and the opposite edge is the broad base.
+            float progress;
+            float halfWidth;
+            if (direction == ArrowDirection.Up)
+            {
+                progress = (size - 1 - y) / (float)(size - 1);
+                halfWidth = progress * (size * .42f);
+                bool inside = Mathf.Abs(x - center) <= halfWidth;
+                pixels[y * size + x] = inside ? new Color32(255, 255, 255, 255) : new Color32(255, 255, 255, 0);
+                continue;
+            }
+            if (direction == ArrowDirection.Down)
+            {
+                progress = y / (float)(size - 1);
+                halfWidth = progress * (size * .42f);
+                bool inside = Mathf.Abs(x - center) <= halfWidth;
+                pixels[y * size + x] = inside ? new Color32(255, 255, 255, 255) : new Color32(255, 255, 255, 0);
+                continue;
+            }
+
+            progress = direction == ArrowDirection.Right
+                ? (size - 1 - x) / (float)(size - 1)
+                : x / (float)(size - 1);
+            halfWidth = progress * (size * .42f);
+            bool horizontalInside = Mathf.Abs(y - center) <= halfWidth;
+            pixels[y * size + x] = horizontalInside ? new Color32(255, 255, 255, 255) : new Color32(255, 255, 255, 0);
         }
         texture.SetPixels32(pixels);
         texture.Apply(false, true);
         Sprite sprite = Sprite.Create(texture, new Rect(0, 0, size, size), new Vector2(.5f, .5f), size);
-        sprite.name = pointsUp ? "FloodLearningUI_ArrowUp" : "FloodLearningUI_ArrowDown";
+        sprite.name = $"FloodLearningUI_Arrow{direction}";
         sprite.hideFlags = HideFlags.HideAndDontSave;
         return sprite;
     }
