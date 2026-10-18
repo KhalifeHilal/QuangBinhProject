@@ -57,7 +57,7 @@ MonoBehaviour:
   pipeArea: 0.002
   dryThreshold: 0.00001
   oneWayFlow: 0
-  openDownstreamBoundary: 1
+  openDownstreamBoundary: 0
   rainRate: 0
   evaporation: 0.004
   maximumWater: 15

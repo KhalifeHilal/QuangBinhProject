@@ -24,9 +24,9 @@ public sealed class TerrainFloodSimulation : MonoBehaviour
     public float pipeArea = 0.0007f;
     [Min(0f)] public float dryThreshold = 0.00001f;
     [Tooltip("Keep scenario flow directed from the left. Disable for the full four-way equation.")]
-    public bool oneWayFlow = false;
+    public bool oneWayFlow = true;
     [Tooltip("Let water leave through the right edge. Disable to make the river end act as a closed basin where the level rises.")]
-    public bool openDownstreamBoundary = true;
+    public bool openDownstreamBoundary = false;
     public float rainRate = 0f;
     public float evaporation = 0.004f;
     // Maximum water depth in metres. This is intentionally high enough for overtopping.
