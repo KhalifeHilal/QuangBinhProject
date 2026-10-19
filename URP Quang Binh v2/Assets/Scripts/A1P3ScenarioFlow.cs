@@ -9,6 +9,12 @@ public sealed class A1P3ScenarioFlow : MonoBehaviour
 {
     enum Phase { Idle, WaitingForA, Preview, Question, BuildingDykes, Flood, Confidence }
 
+    [Header("A1-P3 scenario houses")]
+    [SerializeField] GameObject houseE;
+    [SerializeField] GameObject houseF;
+    [SerializeField] GameObject houseG;
+    [SerializeField] GameObject houseH;
+
     InputAction questA;
     GameObject floodPrefab, prompt, preview, previewHint, waterDirectionHint, activeFlood;
     TerrainFloodSimulation simulation;
@@ -19,11 +25,13 @@ public sealed class A1P3ScenarioFlow : MonoBehaviour
     void Awake()
     {
         SetHospital(false);
+        SetA1P3Houses(false);
     }
 
     public void Begin(GameObject prefab, float previewSeconds, float simulationSeconds)
     {
         SetHospital(true, true);
+        SetA1P3Houses(true);
         floodPrefab = prefab;
         viewingDuration = previewSeconds;
         floodDuration = simulationSeconds;
@@ -98,6 +106,7 @@ public sealed class A1P3ScenarioFlow : MonoBehaviour
         Cleanup(ref activeFlood);
         ClearDykes();
         SetHospital(false);
+        SetA1P3Houses(false);
         phase = Phase.Confidence;
         P3Panel.ShowConfidence(selectedAnswer, StartA1P4);
     }
@@ -149,6 +158,34 @@ public sealed class A1P3ScenarioFlow : MonoBehaviour
         hospital.SetActive(active);
     }
 
+    /// <summary>
+    /// Shows or hides the four FBX house instances used only by A1-P3. Direct
+    /// inspector references are optional; exact-name lookup also finds nested
+    /// and currently inactive FBX instances.
+    /// </summary>
+    void SetA1P3Houses(bool active)
+    {
+        GameObject[] assigned = { houseE, houseF, houseG, houseH };
+        string[] names = { "HOUSE_E", "HOUSE_F", "HOUSE_G", "HOUSE_H" };
+        var touched = new System.Collections.Generic.HashSet<int>();
+
+        for (int i = 0; i < names.Length; i++)
+        {
+            if (assigned[i] != null)
+            {
+                assigned[i].SetActive(active);
+                touched.Add(assigned[i].GetInstanceID());
+            }
+
+            foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+            foreach (Transform child in root.GetComponentsInChildren<Transform>(true))
+            {
+                if (!string.Equals(child.name, names[i], StringComparison.OrdinalIgnoreCase)) continue;
+                if (touched.Add(child.gameObject.GetInstanceID())) child.gameObject.SetActive(active);
+            }
+        }
+    }
+
     static GameObject FindHospital()
     {
         foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
@@ -163,6 +200,7 @@ public sealed class A1P3ScenarioFlow : MonoBehaviour
     void OnDestroy()
     {
         SetHospital(false);
+        SetA1P3Houses(false);
         questA?.Disable(); questA?.Dispose();
         Cleanup(ref prompt); Cleanup(ref preview); Cleanup(ref previewHint); Cleanup(ref waterDirectionHint); Cleanup(ref activeFlood);
     }

@@ -9,6 +9,13 @@ using UnityEngine.XR.Interaction.Toolkit.UI;
 public sealed class A1P2ScenarioFlow : MonoBehaviour
 {
     enum Phase { Idle, WaitingForA, Preview, Question, BuildingDykes, Flood, Confidence }
+
+    [Header("A1-P2 scenario houses")]
+    [SerializeField] GameObject houseE;
+    [SerializeField] GameObject houseF;
+    [SerializeField] GameObject houseG;
+    [SerializeField] GameObject houseH;
+
     InputAction questA;
     GameObject floodPrefab, prompt, preview, previewHint, waterDirectionHint, activeFlood;
     TerrainFloodSimulation simulation;
@@ -16,8 +23,14 @@ public sealed class A1P2ScenarioFlow : MonoBehaviour
     int selectedAnswer = -1;
     Phase phase;
 
+    void Awake()
+    {
+        SetA1P2Houses(false);
+    }
+
     public void Begin(GameObject prefab, float previewSeconds, float simulationSeconds)
     {
+        SetA1P2Houses(true);
         floodPrefab = prefab; viewingDuration = previewSeconds; floodDuration = simulationSeconds;
         questA ??= new InputAction("A1-P2 Continue", InputActionType.Button, "<XRController>{RightHand}/primaryButton");
         questA.Enable();
@@ -85,6 +98,7 @@ public sealed class A1P2ScenarioFlow : MonoBehaviour
     void FinishFlood()
     {
         simulation?.StopSimulation(); CleanupObject(ref activeFlood); ClearDykeManagerChildren();
+        SetA1P2Houses(false);
         phase = Phase.Confidence;
         P2Panel.ShowConfidence(selectedAnswer, StartA1P3);
     }
@@ -114,8 +128,37 @@ public sealed class A1P2ScenarioFlow : MonoBehaviour
     }
 
     static GameObject Find(string name) { foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects()) foreach (Transform child in root.GetComponentsInChildren<Transform>(true)) if (child.name == name) return child.gameObject; return null; }
+
+    /// <summary>
+    /// Shows or hides the four FBX house instances used only by A1-P2. Direct
+    /// inspector references are optional; exact-name lookup also finds nested
+    /// and currently inactive FBX instances.
+    /// </summary>
+    void SetA1P2Houses(bool active)
+    {
+        GameObject[] assigned = { houseE, houseF, houseG, houseH };
+        string[] names = { "HOUSE_E", "HOUSE_F", "HOUSE_G", "HOUSE_H" };
+        var touched = new System.Collections.Generic.HashSet<int>();
+
+        for (int i = 0; i < names.Length; i++)
+        {
+            if (assigned[i] != null)
+            {
+                assigned[i].SetActive(active);
+                touched.Add(assigned[i].GetInstanceID());
+            }
+
+            foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+            foreach (Transform child in root.GetComponentsInChildren<Transform>(true))
+            {
+                if (!string.Equals(child.name, names[i], StringComparison.OrdinalIgnoreCase)) continue;
+                if (touched.Add(child.gameObject.GetInstanceID())) child.gameObject.SetActive(active);
+            }
+        }
+    }
+
     static void CleanupObject(ref GameObject target) { if (target != null) UnityEngine.Object.Destroy(target); target = null; }
-    void OnDestroy() { questA?.Disable(); questA?.Dispose(); CleanupObject(ref prompt); CleanupObject(ref preview); CleanupObject(ref previewHint); CleanupObject(ref waterDirectionHint); CleanupObject(ref activeFlood); }
+    void OnDestroy() { SetA1P2Houses(false); questA?.Disable(); questA?.Dispose(); CleanupObject(ref prompt); CleanupObject(ref preview); CleanupObject(ref previewHint); CleanupObject(ref waterDirectionHint); CleanupObject(ref activeFlood); }
 }
 
 public sealed class FloodBarrierScenarioA1P2 : MonoBehaviour
