@@ -8,10 +8,10 @@ public sealed class FloodScenarioQuizPanel : MonoBehaviour
 {
     static readonly string[] Answers =
     {
-        "A) Path A, because shorter pathways generally transport floodwater more quickly.",
-        "B) Path B, because the continuous low-elevation corridor provides a more plausible flood pathway despite its greater length.",
-        "C) Both pathways should be considered equally because distance and elevation compensate for each other.",
-        "D) Path A, because water accumulating on elevated terrain creates a stronger downstream flood wave."
+        "A) Path A: its shorter distance to the district.",
+        "B) Path B: its connected low-lying terrain.",
+        "C) Both: elevation and distance cancel each other out.",
+        "D) Path A: its higher ground creates stronger flow."
     };
     readonly Button[] answerButtons = new Button[4];
     GameObject questionGroup, confidenceGroup, feedbackGroup;
@@ -56,17 +56,21 @@ public sealed class FloodScenarioQuizPanel : MonoBehaviour
         GetComponent<Canvas>().renderMode = RenderMode.WorldSpace;
         GetComponent<Canvas>().sortingOrder = 200;
         RectTransform root = (RectTransform)transform;
-        root.sizeDelta = new Vector2(1450, 1020);
+        root.sizeDelta = new Vector2(1450, 1120);
         root.localScale = Vector3.one * .0015f;
         FloodLearningUIStyle.ApplyPanel(gameObject.AddComponent<Image>());
-        FloodLearningUI.Text("Title", transform, "A1 - P1  |  Floodway Path Identification", 44, FontStyles.Bold, -28, 62, TextAlignmentOptions.Left, 55);
+        FloodLearningUI.Text("Title", transform, "A1 — P1  |  Flood Pathway Identification", 44, FontStyles.Bold, -28, 62, TextAlignmentOptions.Left, 55);
 
         questionGroup = FloodLearningUI.Group("QuestionGroup", transform);
-        FloodLearningUI.Text("Question", questionGroup.transform, "Which pathway should receive greater attention when planning flood protection?", 34, FontStyles.Bold, -110, 90, TextAlignmentOptions.TopLeft, 55);
-        for (int i = 0; i < Answers.Length; i++) answerButtons[i] = CreateAnswerButton(i, -225 - i * 125);
-        TMP_Text hint = FloodLearningUI.Text("Hint", questionGroup.transform, "Point at an answer and confirm it with the controller trigger.", 27, FontStyles.Normal, -750, 55, TextAlignmentOptions.Center, 55);
+        TMP_Text scenario = FloodLearningUI.Text("Scenario", questionGroup.transform,
+            "Scenario: A residential district needs to be protected. Path A is shorter but crosses relatively elevated terrain. Path B is longer but follows a continuous low-elevation corridor.",
+            28, FontStyles.Normal, -105, 105, TextAlignmentOptions.TopLeft, 55);
+        scenario.color = new Color(.88f, .94f, 1f);
+        FloodLearningUI.Text("Question", questionGroup.transform, "Which pathway is most likely to carry floodwater toward the district?", 34, FontStyles.Bold, -235, 90, TextAlignmentOptions.TopLeft, 55);
+        for (int i = 0; i < Answers.Length; i++) answerButtons[i] = CreateAnswerButton(i, -350 - i * 125);
+        TMP_Text hint = FloodLearningUI.Text("Hint", questionGroup.transform, "Point at an answer and confirm it with the controller trigger.", 27, FontStyles.Normal, -875, 55, TextAlignmentOptions.Center, 55);
         hint.color = new Color(.72f, .86f, 1);
-        FloodLearningUI.Button("RepeatScenario", questionGroup.transform, "Repeat scenario", -840, 82, 29, RepeatScenario, 390);
+        FloodLearningUI.Button("RepeatScenario", questionGroup.transform, "Repeat scenario", -965, 82, 29, RepeatScenario, 390);
         BuildConfidenceStep();
         BuildFeedbackStep();
         questionGroup.SetActive(!confidenceOnly);
@@ -94,10 +98,10 @@ public sealed class FloodScenarioQuizPanel : MonoBehaviour
     {
         feedbackGroup = FloodLearningUI.Group("FeedbackGroup", transform);
         FloodLearningUI.Text("Result", feedbackGroup.transform, "", 39, FontStyles.Bold, -120, 62, TextAlignmentOptions.Center, 65);
-        TMP_Text correct = FloodLearningUI.Text("CorrectAnswer", feedbackGroup.transform, "Correct answer: B) Path B, because the continuous low-elevation corridor provides a more plausible flood pathway despite its greater length.", 31, FontStyles.Bold, -220, 135, TextAlignmentOptions.TopLeft, 70);
+        TMP_Text correct = FloodLearningUI.Text("CorrectAnswer", feedbackGroup.transform, "Correct answer: B) Path B: its connected low-lying terrain.", 31, FontStyles.Bold, -220, 135, TextAlignmentOptions.TopLeft, 70);
         correct.color = new Color(.4f, 1, .55f);
         FloodLearningUI.Text("ExplanationTitle", feedbackGroup.transform, "Explanation", 34, FontStyles.Bold, -395, 55, TextAlignmentOptions.Left, 70);
-        FloodLearningUI.Text("Explanation", feedbackGroup.transform, "Floodwater movement is strongly influenced by terrain connectivity and elevation. A longer but continuously low-lying corridor can provide a more plausible route than a shorter route that requires water to cross higher terrain. Straight-line distance alone is therefore not sufficient for identifying the dominant flood pathway.", 29, FontStyles.Normal, -465, 260, TextAlignmentOptions.TopLeft, 70);
+        FloodLearningUI.Text("Explanation", feedbackGroup.transform, "Floodwater movement is strongly influenced by terrain connectivity and elevation. A longer but continuously low-lying corridor can provide a more plausible route than a shorter route that requires water to cross substantially higher terrain. Straight-line distance alone is therefore not sufficient for identifying the dominant flood pathway.", 29, FontStyles.Normal, -465, 260, TextAlignmentOptions.TopLeft, 70);
         if (confidenceCompleted != null)
             FloodLearningUI.Button("Continue", feedbackGroup.transform, "Continue", -785, 82, 29, ContinueAfterFeedback, 360);
     }
@@ -218,7 +222,7 @@ sealed class FloodScenarioContinuePrompt : MonoBehaviour
         GameObject root = new GameObject("A1_P1_ContinuePrompt", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler)); root.GetComponent<Canvas>().renderMode = RenderMode.WorldSpace;
         RectTransform r = (RectTransform)root.transform; r.sizeDelta = new Vector2(900, 330); r.localScale = Vector3.one * .0015f; FloodLearningUIStyle.ApplyPanel(root.AddComponent<Image>());
         FloodLearningUI.Text("Title", root.transform, "A1 - P1", 39, FontStyles.Bold, -35, 55, TextAlignmentOptions.Center, 45);
-        FloodLearningUI.Text("Scenario", root.transform, "Floodway Path Identification", 43, FontStyles.Bold, -105, 65, TextAlignmentOptions.Center, 45);
+        FloodLearningUI.Text("Scenario", root.transform, "Flood Pathway Identification", 43, FontStyles.Bold, -105, 65, TextAlignmentOptions.Center, 45);
         TMP_Text prompt = FloodLearningUI.Text("Prompt", root.transform, "Press A to continue", 35, FontStyles.Normal, -210, 55, TextAlignmentOptions.Center, 45); prompt.color = new Color(.35f, .82f, 1);
         FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.1f); return root;
     }

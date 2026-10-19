@@ -6,6 +6,12 @@ using UnityEngine.SceneManagement;
 public sealed class PlayMakerTerrainFloodScenario03 : MonoBehaviour
 {
     [SerializeField] GameObject floodPrefab;
+    [Header("A1-P1 scenario houses")]
+    [UnityEngine.Tooltip("Optional direct references. If left empty, the objects are found by the exact names HOUSE_A ... HOUSE_D.")]
+    [SerializeField] GameObject houseA;
+    [SerializeField] GameObject houseB;
+    [SerializeField] GameObject houseC;
+    [SerializeField] GameObject houseD;
     [SerializeField] float duration = 25f;
     [SerializeField] float pathwayViewingDuration = 15f;
     PlayMakerFSM tutorial;
@@ -27,6 +33,10 @@ public sealed class PlayMakerTerrainFloodScenario03 : MonoBehaviour
         questA = new InputAction("Start Flood Scenario 03", InputActionType.Button,
             "<XRController>{RightHand}/primaryButton");
         questA.Enable();
+
+        // These FBX instances are scenario-only content. Keep them hidden while
+        // the tutorial is running and until the participant starts A1-P1.
+        SetA1P1Houses(false);
     }
 
     /// <summary>Starts A1-P1 directly without waiting for the PlayMaker tutorial.</summary>
@@ -79,6 +89,7 @@ public sealed class PlayMakerTerrainFloodScenario03 : MonoBehaviour
     {
         TutorialTerrainTopography.ActivateAfterTutorial();
         HideA1P1Buildings();
+        SetA1P1Houses(true);
         SetDykeConstruction(false, true);
         Transform parent = Find("FakeFloodEnvironment")?.transform;
         if (continuePrompt != null) Destroy(continuePrompt);
@@ -143,6 +154,7 @@ public sealed class PlayMakerTerrainFloodScenario03 : MonoBehaviour
         if (activeScenario != null) Destroy(activeScenario);
         activeScenario = null;
         ClearDykeManagerChildren();
+        SetA1P1Houses(false);
         phase = Phase.Confidence;
         FloodScenarioQuizPanel.ShowConfidence(selectedAnswer, StartA1P2);
     }
@@ -204,6 +216,39 @@ public sealed class PlayMakerTerrainFloodScenario03 : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Shows or hides the four FBX house instances used only by A1-P1. Direct
+    /// inspector references are preferred, but name lookup also works for
+    /// inactive objects and nested FBX prefab instances.
+    /// </summary>
+    void SetA1P1Houses(bool visible)
+    {
+        GameObject[] assigned = { houseA, houseB, houseC, houseD };
+        string[] names = { "HOUSE_A", "HOUSE_B", "HOUSE_C", "HOUSE_D" };
+        var touched = new System.Collections.Generic.HashSet<int>();
+
+        for (int i = 0; i < names.Length; i++)
+        {
+            GameObject target = assigned[i];
+            if (target != null)
+            {
+                target.SetActive(visible);
+                touched.Add(target.GetInstanceID());
+            }
+
+            // Find all exact matches. This also catches inactive FBX instances,
+            // which Unity's ordinary Find methods intentionally skip.
+            foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+            {
+                foreach (Transform item in root.GetComponentsInChildren<Transform>(true))
+                {
+                    if (!string.Equals(item.name, names[i], System.StringComparison.OrdinalIgnoreCase)) continue;
+                    if (touched.Add(item.gameObject.GetInstanceID())) item.gameObject.SetActive(visible);
+                }
+            }
+        }
+    }
+
     static void SetTutorialDykeBuildingGuide(bool visible)
     {
         GameObject guide = Find("DykeBuilding Phase");
@@ -229,6 +274,7 @@ public sealed class PlayMakerTerrainFloodScenario03 : MonoBehaviour
 
     void OnDestroy()
     {
+        SetA1P1Houses(false);
         questA?.Disable(); questA?.Dispose();
         if (continuePrompt != null) Destroy(continuePrompt);
         if (observationHint != null) Destroy(observationHint);
