@@ -19,7 +19,6 @@ public sealed class A1P5ScenarioFlow : MonoBehaviour
 
     public void Begin(GameObject prefab, float previewSeconds, float simulationSeconds)
     {
-        SetP4ScenarioObjects(false);
         SetP5ScenarioObjects(true);
         floodPrefab = prefab;
         viewingDuration = previewSeconds;
@@ -145,12 +144,6 @@ public sealed class A1P5ScenarioFlow : MonoBehaviour
         foreach (Transform child in root.GetComponentsInChildren<Transform>(true))
             if (child.name == name) return child.gameObject;
         return null;
-    }
-
-    static void SetP4ScenarioObjects(bool active)
-    {
-        SetObjectActive("A1P4_1", active);
-        SetObjectActive("A1P4_2", active);
     }
 
     static void SetP5ScenarioObjects(bool active)

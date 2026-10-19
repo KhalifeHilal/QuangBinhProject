@@ -23,8 +23,6 @@ public sealed class A1P4ScenarioFlow : MonoBehaviour
 
     public void Begin(GameObject prefab, float previewSeconds, float simulationSeconds)
     {
-        SetP3ScenarioObjects(false);
-        SetP4ScenarioObjects(true);
         floodPrefab = prefab;
         viewingDuration = previewSeconds;
         floodDuration = simulationSeconds;
@@ -107,7 +105,6 @@ public sealed class A1P4ScenarioFlow : MonoBehaviour
         simulation?.StopSimulation();
         Cleanup(ref activeFlood);
         ClearDykes();
-        SetP4ScenarioObjects(false);
         phase = Phase.Confidence;
         A1P4Panel.ShowConfidence(selectedAnswer, StartA1P5);
     }
@@ -151,22 +148,6 @@ public sealed class A1P4ScenarioFlow : MonoBehaviour
         return null;
     }
 
-    static void SetP3ScenarioObjects(bool active)
-    {
-        GameObject first = Find("A1P3_1");
-        GameObject second = Find("A1P3_2");
-        if (first != null) first.SetActive(active);
-        if (second != null) second.SetActive(active);
-    }
-
-    static void SetP4ScenarioObjects(bool active)
-    {
-        GameObject first = Find("A1P4_1");
-        GameObject second = Find("A1P4_2");
-        if (first != null) first.SetActive(active);
-        if (second != null) second.SetActive(active);
-    }
-
     static void Cleanup(ref GameObject target)
     {
         if (target != null) UnityEngine.Object.Destroy(target);
@@ -175,7 +156,6 @@ public sealed class A1P4ScenarioFlow : MonoBehaviour
 
     void OnDestroy()
     {
-        SetP4ScenarioObjects(false);
         questA?.Disable();
         questA?.Dispose();
         Cleanup(ref prompt); Cleanup(ref preview); Cleanup(ref previewHint);

@@ -19,7 +19,6 @@ public sealed class A1P2ScenarioFlow : MonoBehaviour
     public void Begin(GameObject prefab, float previewSeconds, float simulationSeconds)
     {
         floodPrefab = prefab; viewingDuration = previewSeconds; floodDuration = simulationSeconds;
-        SetScenarioObjects(true);
         questA ??= new InputAction("A1-P2 Continue", InputActionType.Button, "<XRController>{RightHand}/primaryButton");
         questA.Enable();
         prompt = P2Panel.CreateStartPrompt();
@@ -86,14 +85,12 @@ public sealed class A1P2ScenarioFlow : MonoBehaviour
     void FinishFlood()
     {
         simulation?.StopSimulation(); CleanupObject(ref activeFlood); ClearDykeManagerChildren();
-        SetScenarioObjects(false);
         phase = Phase.Confidence;
         P2Panel.ShowConfidence(selectedAnswer, StartA1P3);
     }
 
     void StartA1P3()
     {
-        SetScenarioObjects(false);
         A1P3ScenarioFlow flow = gameObject.GetComponent<A1P3ScenarioFlow>();
         if (flow == null) flow = gameObject.AddComponent<A1P3ScenarioFlow>();
         flow.Begin(floodPrefab, viewingDuration, floodDuration);
@@ -117,15 +114,8 @@ public sealed class A1P2ScenarioFlow : MonoBehaviour
     }
 
     static GameObject Find(string name) { foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects()) foreach (Transform child in root.GetComponentsInChildren<Transform>(true)) if (child.name == name) return child.gameObject; return null; }
-    static void SetScenarioObjects(bool active)
-    {
-        GameObject first = Find("A1P2_1");
-        GameObject second = Find("A1P2_2");
-        if (first != null) first.SetActive(active);
-        if (second != null) second.SetActive(active);
-    }
     static void CleanupObject(ref GameObject target) { if (target != null) UnityEngine.Object.Destroy(target); target = null; }
-    void OnDestroy() { SetScenarioObjects(false); questA?.Disable(); questA?.Dispose(); CleanupObject(ref prompt); CleanupObject(ref preview); CleanupObject(ref previewHint); CleanupObject(ref waterDirectionHint); CleanupObject(ref activeFlood); }
+    void OnDestroy() { questA?.Disable(); questA?.Dispose(); CleanupObject(ref prompt); CleanupObject(ref preview); CleanupObject(ref previewHint); CleanupObject(ref waterDirectionHint); CleanupObject(ref activeFlood); }
 }
 
 public sealed class FloodBarrierScenarioA1P2 : MonoBehaviour

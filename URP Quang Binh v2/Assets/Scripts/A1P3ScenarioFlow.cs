@@ -16,10 +16,14 @@ public sealed class A1P3ScenarioFlow : MonoBehaviour
     int selectedAnswer = -1;
     Phase phase;
 
+    void Awake()
+    {
+        SetHospital(false);
+    }
+
     public void Begin(GameObject prefab, float previewSeconds, float simulationSeconds)
     {
-        SetP2ScenarioObjects(false);
-        SetP3ScenarioObjects(true);
+        SetHospital(true, true);
         floodPrefab = prefab;
         viewingDuration = previewSeconds;
         floodDuration = simulationSeconds;
@@ -93,7 +97,7 @@ public sealed class A1P3ScenarioFlow : MonoBehaviour
         simulation?.StopSimulation();
         Cleanup(ref activeFlood);
         ClearDykes();
-        SetP3ScenarioObjects(false);
+        SetHospital(false);
         phase = Phase.Confidence;
         P3Panel.ShowConfidence(selectedAnswer, StartA1P4);
     }
@@ -131,27 +135,34 @@ public sealed class A1P3ScenarioFlow : MonoBehaviour
         return null;
     }
 
-    static void SetP2ScenarioObjects(bool active)
+    static void SetHospital(bool active, bool warnIfMissing = false)
     {
-        GameObject first = Find("A1P2_1");
-        GameObject second = Find("A1P2_2");
-        if (first != null) first.SetActive(active);
-        if (second != null) second.SetActive(active);
+        GameObject hospital = FindHospital();
+        if (hospital == null)
+        {
+            if (warnIfMissing)
+                Debug.LogWarning("A1-P3 could not find the HOSPITAL GameObject in the active scene.");
+            return;
+        }
+        // Keep the child hierarchy's active state untouched; toggling the
+        // imported FBX parent reveals or hides all hospital parts together.
+        hospital.SetActive(active);
     }
 
-    static void SetP3ScenarioObjects(bool active)
+    static GameObject FindHospital()
     {
-        GameObject first = Find("A1P3_1");
-        GameObject second = Find("A1P3_2");
-        if (first != null) first.SetActive(active);
-        if (second != null) second.SetActive(active);
+        foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+        foreach (Transform child in root.GetComponentsInChildren<Transform>(true))
+            if (string.Equals(child.name, "HOSPITAL", StringComparison.OrdinalIgnoreCase))
+                return child.gameObject;
+        return null;
     }
 
     static void Cleanup(ref GameObject target) { if (target != null) UnityEngine.Object.Destroy(target); target = null; }
 
     void OnDestroy()
     {
-        SetP3ScenarioObjects(false);
+        SetHospital(false);
         questA?.Disable(); questA?.Dispose();
         Cleanup(ref prompt); Cleanup(ref preview); Cleanup(ref previewHint); Cleanup(ref waterDirectionHint); Cleanup(ref activeFlood);
     }
@@ -188,7 +199,11 @@ public sealed class FloodBarrierScenarioA1P3 : MonoBehaviour
             new Vector3(Mathf.Lerp(b.min.x, b.max.x, .84f), y + .015f, Mathf.Lerp(b.min.z, b.max.z, .43f))
         };
         CreateRoute("Delayed_Water_Bypass", bypassRoute);
-        CreateLabel("PROTECTED AREA", new Vector3(Mathf.Lerp(b.min.x, b.max.x, .75f), y + .3f, Mathf.Lerp(b.min.z, b.max.z, .6f)), 390);
+        Renderer hospital = FindRenderer("HOSPITAL");
+        Vector3 protectedAreaPosition = hospital != null
+            ? hospital.bounds.center + Vector3.up * .3f
+            : new Vector3(Mathf.Lerp(b.min.x, b.max.x, .78f), y + .3f, Mathf.Lerp(b.min.z, b.max.z, .22f));
+        CreateLabel("PROTECTED AREA", protectedAreaPosition, 390);
     }
 
     void CreateLine(string name, Vector3 start, Vector3 end, Material material, float width)
@@ -230,7 +245,8 @@ public sealed class FloodBarrierScenarioA1P3 : MonoBehaviour
     {
         foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
         foreach (Transform child in root.GetComponentsInChildren<Transform>(true))
-            if (child.name == name) return child.GetComponentInChildren<Renderer>(true);
+            if (string.Equals(child.name, name, StringComparison.OrdinalIgnoreCase))
+                return child.GetComponentInChildren<Renderer>(true);
         return null;
     }
 
