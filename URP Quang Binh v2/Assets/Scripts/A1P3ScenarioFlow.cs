@@ -238,9 +238,12 @@ public sealed class FloodBarrierScenarioA1P3 : MonoBehaviour
         };
         CreateRoute("Delayed_Water_Bypass", bypassRoute);
         Renderer hospital = FindRenderer("HOSPITAL");
-        Vector3 protectedAreaPosition = hospital != null
-            ? hospital.bounds.center + Vector3.up * .3f
-            : new Vector3(Mathf.Lerp(b.min.x, b.max.x, .78f), y + .3f, Mathf.Lerp(b.min.z, b.max.z, .22f));
+        Bounds houseBounds;
+        Vector3 protectedAreaPosition = TryGetHouseBounds(out houseBounds)
+            ? houseBounds.center + Vector3.up * (houseBounds.extents.y + .55f)
+            : hospital != null
+                ? hospital.bounds.center + Vector3.up * .3f
+                : new Vector3(Mathf.Lerp(b.min.x, b.max.x, .78f), y + .3f, Mathf.Lerp(b.min.z, b.max.z, .22f));
         CreateLabel("PROTECTED AREA", protectedAreaPosition, 390);
     }
 
@@ -286,6 +289,21 @@ public sealed class FloodBarrierScenarioA1P3 : MonoBehaviour
             if (string.Equals(child.name, name, StringComparison.OrdinalIgnoreCase))
                 return child.GetComponentInChildren<Renderer>(true);
         return null;
+    }
+
+    static bool TryGetHouseBounds(out Bounds bounds)
+    {
+        string[] names = { "HOUSE_E", "HOUSE_F", "HOUSE_G", "HOUSE_H" };
+        bool found = false;
+        bounds = default;
+        foreach (string name in names)
+        {
+            Renderer renderer = FindRenderer(name);
+            if (renderer == null) continue;
+            if (!found) { bounds = renderer.bounds; found = true; }
+            else bounds.Encapsulate(renderer.bounds);
+        }
+        return found;
     }
 
     void OnDestroy()

@@ -14,6 +14,12 @@ public sealed class A1P4ScenarioFlow : MonoBehaviour
 {
     enum Phase { Idle, WaitingForA, Preview, Question, BuildingDykes, Flood, Confidence }
 
+    [Header("A1-P4 scenario houses")]
+    [SerializeField] GameObject houseE;
+    [SerializeField] GameObject houseF;
+    [SerializeField] GameObject houseG;
+    [SerializeField] GameObject houseH;
+
     InputAction questA;
     GameObject floodPrefab, prompt, preview, previewHint, waterDirectionHint, activeFlood;
     TerrainFloodSimulation simulation;
@@ -21,8 +27,16 @@ public sealed class A1P4ScenarioFlow : MonoBehaviour
     int selectedAnswer = -1;
     Phase phase;
 
+    void Awake()
+    {
+        SetA1P4Houses(false);
+        SetHospital(false);
+    }
+
     public void Begin(GameObject prefab, float previewSeconds, float simulationSeconds)
     {
+        SetA1P4Houses(true);
+        SetHospital(true);
         floodPrefab = prefab;
         viewingDuration = previewSeconds;
         floodDuration = simulationSeconds;
@@ -105,6 +119,8 @@ public sealed class A1P4ScenarioFlow : MonoBehaviour
         simulation?.StopSimulation();
         Cleanup(ref activeFlood);
         ClearDykes();
+        SetA1P4Houses(false);
+        SetHospital(false);
         phase = Phase.Confidence;
         A1P4Panel.ShowConfidence(selectedAnswer, StartA1P5);
     }
@@ -148,6 +164,49 @@ public sealed class A1P4ScenarioFlow : MonoBehaviour
         return null;
     }
 
+    static GameObject FindHospital()
+    {
+        foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+        foreach (Transform child in root.GetComponentsInChildren<Transform>(true))
+            if (string.Equals(child.name, "HOSPITAL", StringComparison.OrdinalIgnoreCase))
+                return child.gameObject;
+        return null;
+    }
+
+    static void SetHospital(bool active)
+    {
+        GameObject hospital = FindHospital();
+        if (hospital != null) hospital.SetActive(active);
+    }
+
+    /// <summary>
+    /// Shows or hides the four FBX house instances used by A1-P4. Direct
+    /// inspector references are optional; exact-name lookup also finds nested
+    /// and currently inactive FBX instances.
+    /// </summary>
+    void SetA1P4Houses(bool active)
+    {
+        GameObject[] assigned = { houseE, houseF, houseG, houseH };
+        string[] names = { "HOUSE_E", "HOUSE_F", "HOUSE_G", "HOUSE_H" };
+        var touched = new System.Collections.Generic.HashSet<int>();
+
+        for (int i = 0; i < names.Length; i++)
+        {
+            if (assigned[i] != null)
+            {
+                assigned[i].SetActive(active);
+                touched.Add(assigned[i].GetInstanceID());
+            }
+
+            foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+            foreach (Transform child in root.GetComponentsInChildren<Transform>(true))
+            {
+                if (!string.Equals(child.name, names[i], StringComparison.OrdinalIgnoreCase)) continue;
+                if (touched.Add(child.gameObject.GetInstanceID())) child.gameObject.SetActive(active);
+            }
+        }
+    }
+
     static void Cleanup(ref GameObject target)
     {
         if (target != null) UnityEngine.Object.Destroy(target);
@@ -156,6 +215,8 @@ public sealed class A1P4ScenarioFlow : MonoBehaviour
 
     void OnDestroy()
     {
+        SetA1P4Houses(false);
+        SetHospital(false);
         questA?.Disable();
         questA?.Dispose();
         Cleanup(ref prompt); Cleanup(ref preview); Cleanup(ref previewHint);
@@ -322,9 +383,9 @@ static class A1P4Panel
     static readonly string[] Answers =
     {
         "A) The barrier has completely solved the flooding problem.",
-        "B) Increased upstream depth means the barrier is ineffective.",
-        "C) The barrier obstructed one pathway, but the system responded through accumulation and redistribution, so other areas must also be examined.",
-        "D) The new pathway is unrelated to the intervention because barriers only affect water immediately adjacent to them."
+        "B) The upstream rise proves the intervention did not work.",
+        "C) The barrier changed flow paths and upstream storage.",
+        "D) The other pathway must be unrelated to the intervention."
     };
 
     public static GameObject CreateStartPrompt()
@@ -351,7 +412,7 @@ static class A1P4Panel
         GameObject root = P2Panel.CanvasRoot("Quiz_A1_P4", new Vector2(1600, 1180));
         FloodLearningUI.Text("Title", root.transform, "A1 - P4  |  Water Redistribution", 44, FontStyles.Bold, -28, 62, TextAlignmentOptions.Left, 55);
         FloodLearningUI.Text("Scenario", root.transform, "Following construction of a barrier, water depth immediately upstream increases, flooding behind the barrier decreases, and another pathway begins carrying more water.", 29, FontStyles.Normal, -105, 100, TextAlignmentOptions.TopLeft, 55);
-        FloodLearningUI.Text("Question", root.transform, "Which interpretation is most appropriate?", 34, FontStyles.Bold, -220, 65, TextAlignmentOptions.TopLeft, 55);
+        FloodLearningUI.Text("Question", root.transform, "What best explains the combination of upstream accumulation and additional flow elsewhere?", 34, FontStyles.Bold, -220, 65, TextAlignmentOptions.TopLeft, 55);
         for (int i = 0; i < Answers.Length; i++)
         {
             int n = i;
@@ -391,7 +452,7 @@ static class A1P4Panel
             39, FontStyles.Bold, -105, 62, TextAlignmentOptions.Center, 65);
         result.color = answer == 2 ? new Color(.4f, 1f, .55f) : new Color(1f, .68f, .35f);
         FloodLearningUI.Text("Correct", root.transform,
-            "Correct answer: C) The barrier obstructed one pathway, but the system responded through accumulation and redistribution, so other areas must also be examined.",
+            "Correct answer: C) The barrier changed flow paths and upstream storage.",
             30, FontStyles.Bold, -205, 175, TextAlignmentOptions.TopLeft, 70).color = new Color(.4f, 1f, .55f);
         FloodLearningUI.Text("ExplanationTitle", root.transform, "Explanation", 34, FontStyles.Bold, -415, 55, TextAlignmentOptions.Left, 70);
         FloodLearningUI.Text("Explanation", root.transform,
