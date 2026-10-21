@@ -10,6 +10,17 @@ public sealed class A1P6ScenarioFlow : MonoBehaviour
 {
     enum Phase { Idle, WaitingForA, Preview, Question, BuildingDykes, Flood, Confidence }
 
+    [Header("A1-P6 buildings")]
+    [SerializeField] GameObject houseL;
+    [SerializeField] GameObject houseM;
+    [SerializeField] GameObject houseN;
+    [SerializeField] GameObject houseO;
+    [SerializeField] GameObject houseP;
+    [SerializeField] GameObject houseQ;
+    [SerializeField] GameObject houseR;
+    [SerializeField] GameObject houseS;
+    [SerializeField] GameObject hospitalB;
+
     InputAction questA;
     GameObject floodPrefab, prompt, preview, previewHint, waterDirectionHint, activeFlood;
     TerrainFloodSimulation simulation;
@@ -17,10 +28,18 @@ public sealed class A1P6ScenarioFlow : MonoBehaviour
     int selectedAnswer = -1;
     Phase phase;
 
+    void Awake()
+    {
+        SetP6ScenarioObjects(false);
+        SetP6Buildings(false);
+    }
+
     public void Begin(GameObject prefab, float previewSeconds, float simulationSeconds)
     {
         SetP5ScenarioObjects(false);
-        SetP6ScenarioObjects(true);
+        // The old A1P6_1/A1P6_2 procedural comparison is not used here.
+        SetP6ScenarioObjects(false);
+        SetP6Buildings(true);
         floodPrefab = prefab;
         viewingDuration = previewSeconds;
         floodDuration = simulationSeconds;
@@ -39,6 +58,7 @@ public sealed class A1P6ScenarioFlow : MonoBehaviour
 
     void Update()
     {
+        if (phase == Phase.BuildingDykes) EnforceMaximumTwoDykes();
         if (phase == Phase.WaitingForA && questA.WasPressedThisFrame()) StartPreview();
         if (phase == Phase.BuildingDykes && questA.WasPressedThisFrame()) StartFlood();
         if (phase != Phase.Preview && phase != Phase.Flood) return;
@@ -47,13 +67,22 @@ public sealed class A1P6ScenarioFlow : MonoBehaviour
         else if (phase == Phase.Flood && elapsed >= floodDuration) FinishFlood();
     }
 
+    static void EnforceMaximumTwoDykes()
+    {
+        DykeManagerTutorial manager = UnityEngine.Object.FindFirstObjectByType<DykeManagerTutorial>(FindObjectsInactive.Include);
+        if (manager == null) return;
+        A1P1ScenarioDyke[] dykes = manager.GetComponentsInChildren<A1P1ScenarioDyke>(true);
+        for (int i = 2; i < dykes.Length; i++)
+            if (dykes[i] != null) UnityEngine.Object.Destroy(dykes[i].gameObject);
+    }
+
     void StartPreview()
     {
         Cleanup(ref prompt); Cleanup(ref preview); Cleanup(ref previewHint);
         SetDykeConstruction(false); ClearDykes();
-        preview = new GameObject("Scenario_A1_P6_SystemLevelConsequences");
-        preview.AddComponent<FloodSystemLevelScenarioA1P6>();
-        previewHint = ScenarioGuidanceOverlay.ShowObservation("Compare local protection with exposure elsewhere");
+        preview = new GameObject("Scenario_A1_P6_PriorityLabels");
+        CreatePriorityLabels(preview.transform);
+        previewHint = ScenarioGuidanceOverlay.ShowObservation("Compare building priorities and the consequences of redirected water");
         elapsed = 0f;
         phase = Phase.Preview;
     }
@@ -104,6 +133,7 @@ public sealed class A1P6ScenarioFlow : MonoBehaviour
         Cleanup(ref activeFlood);
         ClearDykes();
         SetP6ScenarioObjects(false);
+        SetP6Buildings(false);
         phase = Phase.Confidence;
         A1P6Panel.ShowConfidence(selectedAnswer);
     }
@@ -153,6 +183,69 @@ public sealed class A1P6ScenarioFlow : MonoBehaviour
         SetObjectActive("A1P6_2", active);
     }
 
+    void SetP6Buildings(bool active)
+    {
+        GameObject[] assigned = { houseL, houseM, houseN, houseO, houseP, houseQ, houseR, houseS, hospitalB };
+        string[] names = { "HOUSE_L", "HOUSE_M", "HOUSE_N", "HOUSE_O", "HOUSE_P", "HOUSE_Q", "HOUSE_R", "HOUSE_S", "HOSPITAL_B" };
+        var touched = new System.Collections.Generic.HashSet<int>();
+
+        for (int i = 0; i < names.Length; i++)
+        {
+            if (assigned[i] != null)
+            {
+                assigned[i].SetActive(active);
+                touched.Add(assigned[i].GetInstanceID());
+            }
+
+            foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+            foreach (Transform child in root.GetComponentsInChildren<Transform>(true))
+            {
+                if (!string.Equals(child.name, names[i], StringComparison.OrdinalIgnoreCase)) continue;
+                if (touched.Add(child.gameObject.GetInstanceID())) child.gameObject.SetActive(active);
+            }
+        }
+    }
+
+    void CreatePriorityLabels(Transform parent)
+    {
+        CreatePriorityLabel(parent, "ImportantDistrict_LM", "IMPORTANT DISTRICT", new[] { "HOUSE_L", "HOUSE_M" });
+        CreatePriorityLabel(parent, "ImportantDistrict_OQ", "IMPORTANT DISTRICT", new[] { "HOUSE_O", "HOUSE_P", "HOUSE_Q" });
+        CreatePriorityLabel(parent, "LowPriorityDistrict_RS", "LOW-PRIORITY DISTRICT", new[] { "HOUSE_R", "HOUSE_S" });
+        CreatePriorityLabel(parent, "VeryImportantHospital", "VERY IMPORTANT BUILDING", new[] { "HOSPITAL_B" });
+    }
+
+    void CreatePriorityLabel(Transform parent, string name, string text, string[] objectNames)
+    {
+        if (!TryGetBounds(objectNames, out Bounds bounds)) return;
+        GameObject label = P2Panel.CanvasRoot(name, new Vector2(560, 105), .00115f);
+        label.transform.SetParent(parent, true);
+        label.transform.position = bounds.center + Vector3.up * (bounds.extents.y + .35f);
+        if (Camera.main != null)
+            label.transform.rotation = Quaternion.LookRotation(label.transform.position - Camera.main.transform.position, Vector3.up);
+        FloodLearningUI.Text("Text", label.transform, text, 29, FontStyles.Bold, -8, 92,
+            TextAlignmentOptions.Center, 8);
+    }
+
+    static bool TryGetBounds(string[] objectNames, out Bounds bounds)
+    {
+        bounds = default;
+        bool found = false;
+        foreach (string objectName in objectNames)
+        {
+            foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+            foreach (Transform child in root.GetComponentsInChildren<Transform>(true))
+            {
+                if (!string.Equals(child.name, objectName, StringComparison.OrdinalIgnoreCase)) continue;
+                foreach (Renderer renderer in child.GetComponentsInChildren<Renderer>(true))
+                {
+                    if (!found) { bounds = renderer.bounds; found = true; }
+                    else bounds.Encapsulate(renderer.bounds);
+                }
+            }
+        }
+        return found;
+    }
+
     static void SetObjectActive(string objectName, bool active)
     {
         GameObject target = Find(objectName);
@@ -168,6 +261,7 @@ public sealed class A1P6ScenarioFlow : MonoBehaviour
     void OnDestroy()
     {
         SetP6ScenarioObjects(false);
+        SetP6Buildings(false);
         questA?.Disable();
         questA?.Dispose();
         Cleanup(ref prompt); Cleanup(ref preview); Cleanup(ref previewHint);
@@ -267,10 +361,10 @@ static class A1P6Panel
 {
     static readonly string[] Answers =
     {
-        "A) Strategy A is necessarily superior because target-area protection should be evaluated independently.",
-        "B) Both are equally successful because both protect most of the target area.",
-        "C) Strategy A is preferable because redistribution is irrelevant outside the original target.",
-        "D) Strategy B may represent the better system-level solution because it achieves substantial protection while producing less additional exposure elsewhere."
+        "A) Strategy A, because it directly protects more buildings.",
+        "B) Both strategies, because each uses the maximum of two barriers.",
+        "C) Strategy A, because flooding outside the primary protection area is irrelevant.",
+        "D) Strategy B, because it prioritizes critical buildings and avoids transferring substantial flood risk to another important location."
     };
 
     public static GameObject CreateStartPrompt()
@@ -287,24 +381,33 @@ static class A1P6Panel
     {
         GameObject root = P2Panel.CanvasRoot("A1_P6_Build", new Vector2(1100, 390));
         FloodLearningUI.Text("Title", root.transform, "A1 - P6  |  Build protection", 39, FontStyles.Bold, -35, 58, TextAlignmentOptions.Center, 45);
-        FloodLearningUI.Text("Prompt", root.transform, "Build dykes for your answer anywhere on the terrain with the trigger.\nPoint at one and press Grip to destroy it. Press A when you are finished.", 30, FontStyles.Bold, -135, 125, TextAlignmentOptions.Center, 55).color = new Color(.35f, .82f, 1f);
+        FloodLearningUI.Text("Prompt", root.transform, "Build up to two dykes for your strategy anywhere on the terrain with the trigger.\nPoint at one and press Grip to destroy it. Press A when you are finished.", 30, FontStyles.Bold, -135, 135, TextAlignmentOptions.Center, 55).color = new Color(.35f, .82f, 1f);
         FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.1f);
         return root;
     }
 
     public static void ShowQuestion(Action repeat, Action<int> answer)
     {
-        GameObject root = P2Panel.CanvasRoot("Quiz_A1_P6", new Vector2(1600, 1180));
+        GameObject root = P2Panel.CanvasRoot("Quiz_A1_P6", new Vector2(1700, 1600));
         FloodLearningUI.Text("Title", root.transform, "A1 - P6  |  System-Level Consequences", 44, FontStyles.Bold, -28, 62, TextAlignmentOptions.Left, 55);
-        FloodLearningUI.Text("Scenario", root.transform, "Strategy A protects 95% of the target district but substantially increases flooding in another populated district. Strategy B protects 88% of the target district and redirects additional water primarily toward an uninhabited open area. All other factors are comparable.", 28, FontStyles.Normal, -105, 145, TextAlignmentOptions.TopLeft, 55);
-        FloodLearningUI.Text("Question", root.transform, "Which statement is best supported?", 34, FontStyles.Bold, -275, 65, TextAlignmentOptions.TopLeft, 55);
+        FloodLearningUI.Text("Scenario", root.transform,
+            "A river flows from left to right through a landscape with four buildings.\n\n" +
+            "- One low-priority building is in the lower-left area.\n" +
+            "- One very high-priority building is in the lower-middle area.\n" +
+            "- One high-priority building is in the lower-right area.\n" +
+            "- One high-priority building is in the upper-right area.\n\n" +
+            "The participant can build a maximum of two flood barriers.\n\n" +
+            "Strategy A protects all three buildings in the lower area. However, the second barrier backs up water, resulting in flooding of the high-priority building in the upper-right area.\n\n" +
+            "Strategy B prioritizes the very high-priority building in the lower-middle area and the high-priority building in the lower-right area. The low-priority building remains exposed to flooding, but the high-priority building in the upper-right area stays dry, and additional water is directed toward an uninhabited open area.",
+            24, FontStyles.Normal, -105, 560, TextAlignmentOptions.TopLeft, 55);
+        FloodLearningUI.Text("Question", root.transform, "Which strategy best considers the overall consequences of flood protection?", 34, FontStyles.Bold, -685, 75, TextAlignmentOptions.TopLeft, 55);
         for (int i = 0; i < Answers.Length; i++)
         {
             int n = i;
-            FloodLearningUI.Button("Answer_" + (char)('A' + i), root.transform, Answers[i], -355 - i * 140, 118, 25,
+            FloodLearningUI.Button("Answer_" + (char)('A' + i), root.transform, Answers[i], -790 - i * 135, 112, 24,
                 () => { UnityEngine.Object.Destroy(root); answer(n); }, 1500);
         }
-        FloodLearningUI.Button("Repeat", root.transform, "Repeat scenario", -925, 82, 29,
+        FloodLearningUI.Button("Repeat", root.transform, "Repeat scenario", -1370, 82, 29,
             () => { UnityEngine.Object.Destroy(root); repeat(); }, 390);
         FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.25f);
     }
@@ -337,13 +440,16 @@ static class A1P6Panel
             39, FontStyles.Bold, -105, 62, TextAlignmentOptions.Center, 65);
         result.color = answer == 3 ? new Color(.4f, 1f, .55f) : new Color(1f, .68f, .35f);
         FloodLearningUI.Text("Correct", root.transform,
-            "Correct answer: D) Strategy B may represent the better system-level solution because it achieves substantial protection while producing less additional exposure elsewhere.",
+            "Correct answer: D) Strategy B, because it prioritizes critical buildings and avoids transferring substantial flood risk to another important location.",
             30, FontStyles.Bold, -205, 175, TextAlignmentOptions.TopLeft, 70).color = new Color(.4f, 1f, .55f);
         FloodLearningUI.Text("ExplanationTitle", root.transform, "Explanation", 34, FontStyles.Bold, -415, 55, TextAlignmentOptions.Left, 70);
         FloodLearningUI.Text("Explanation", root.transform,
-            "Flood-mitigation quality should not be judged only by the originally designated target area. A strategy that provides slightly less local protection may still be preferable if it avoids transferring substantial risk to another vulnerable population.",
-            29, FontStyles.Normal, -485, 235, TextAlignmentOptions.TopLeft, 70);
-        FloodLearningUI.Button("Finish", root.transform, "Finish", -780, 82, 29,
+            "Flood protection should consider both building importance and the consequences of redirected water.\n\n" +
+            "Strategy A directly protects three buildings but causes flooding at another high-priority building.\n\n" +
+            "Strategy B directly protects only two buildings, but it prioritizes the most critical locations, avoids additional flooding at the important upper-right building, and directs excess water toward an uninhabited area.\n\n" +
+            "Therefore, Strategy B provides the better overall protection outcome.",
+            29, FontStyles.Normal, -485, 360, TextAlignmentOptions.TopLeft, 70);
+        FloodLearningUI.Button("Finish", root.transform, "Finish", -950, 82, 29,
             () => UnityEngine.Object.Destroy(root), 360);
         Debug.Log($"A1-P6 result: answer={(char)('A' + answer)}, correct={answer == 3}, confidence={confidence}");
     }
