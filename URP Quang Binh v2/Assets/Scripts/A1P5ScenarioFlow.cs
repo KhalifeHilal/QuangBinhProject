@@ -5,10 +5,21 @@ using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
-/// <summary>A1-P5: choose the corridor that gives the best protection per metre.</summary>
+/// <summary>A1-P5: choose the authored strategy that gives the best protection per metre.</summary>
 public sealed class A1P5ScenarioFlow : MonoBehaviour
 {
     enum Phase { Idle, WaitingForA, Preview, Question, BuildingDykes, Flood, Confidence }
+
+    [Header("A1-P5 scenario houses")]
+    [SerializeField] GameObject houseA;
+    [SerializeField] GameObject houseB;
+    [SerializeField] GameObject houseE;
+    [SerializeField] GameObject houseF;
+    [SerializeField] GameObject houseG;
+    [SerializeField] GameObject houseH;
+    [SerializeField] GameObject houseI;
+    [SerializeField] GameObject houseJ;
+    [SerializeField] GameObject houseK;
 
     InputAction questA;
     GameObject floodPrefab, prompt, preview, previewHint, waterDirectionHint, activeFlood;
@@ -17,9 +28,16 @@ public sealed class A1P5ScenarioFlow : MonoBehaviour
     int selectedAnswer = -1;
     Phase phase;
 
+    void Awake()
+    {
+        SetP5ScenarioObjects(false);
+        SetP5Houses(false);
+    }
+
     public void Begin(GameObject prefab, float previewSeconds, float simulationSeconds)
     {
         SetP5ScenarioObjects(true);
+        SetP5Houses(true);
         floodPrefab = prefab;
         viewingDuration = previewSeconds;
         floodDuration = simulationSeconds;
@@ -50,8 +68,11 @@ public sealed class A1P5ScenarioFlow : MonoBehaviour
     {
         Cleanup(ref prompt); Cleanup(ref preview); Cleanup(ref previewHint);
         SetDykeConstruction(false); ClearDykes();
-        preview = new GameObject("Scenario_A1_P5_ResourceEfficientPlacement");
-        preview.AddComponent<FloodResourceCorridorsScenarioA1P5>();
+        // A1P5_1/2/3 are the authored strategy dykes and labels. Do not add
+        // the old procedural corridor preview here.
+        SetP5ScenarioObjects(true);
+        preview = new GameObject("Scenario_A1_P5_AuthoredStrategies");
+        CreateStrategyLabels(preview.transform);
         previewHint = ScenarioGuidanceOverlay.ShowObservation("Compare protection gained per metre of barrier");
         elapsed = 0f;
         phase = Phase.Preview;
@@ -68,6 +89,9 @@ public sealed class A1P5ScenarioFlow : MonoBehaviour
     {
         selectedAnswer = answer;
         Cleanup(ref preview);
+        // Hide the authored strategy dykes and their labels before the
+        // participant builds one of the strategies themselves.
+        SetP5ScenarioObjects(false);
         SetDykeConstruction(true);
         prompt = A1P5Panel.CreateBuildingPrompt();
         waterDirectionHint = ScenarioGuidanceOverlay.ShowWaterFromLeft();
@@ -103,6 +127,7 @@ public sealed class A1P5ScenarioFlow : MonoBehaviour
         Cleanup(ref activeFlood);
         ClearDykes();
         SetP5ScenarioObjects(false);
+        SetP5Houses(false);
         phase = Phase.Confidence;
         A1P5Panel.ShowConfidence(selectedAnswer, StartA1P6);
     }
@@ -148,8 +173,83 @@ public sealed class A1P5ScenarioFlow : MonoBehaviour
 
     static void SetP5ScenarioObjects(bool active)
     {
+        // Authored strategy mapping: A1P5_1 = Strategy B,
+        // A1P5_2 = Strategy A, A1P5_3 = Strategy C.
         SetObjectActive("A1P5_1", active);
         SetObjectActive("A1P5_2", active);
+        SetObjectActive("A1P5_3", active);
+    }
+
+    void CreateStrategyLabels(Transform parent)
+    {
+        string[] objectNames = { "A1P5_1", "A1P5_2", "A1P5_3" };
+        string[] labels =
+        {
+            "STRATEGY B\n30 m  |  3 buildings\n0.100 buildings / m",
+            "STRATEGY A\n30 m  |  2 buildings\n0.067 buildings / m",
+            "STRATEGY C\n50 m  |  4 buildings\n0.080 buildings / m"
+        };
+
+        for (int i = 0; i < objectNames.Length; i++)
+        {
+            GameObject strategy = Find(objectNames[i]);
+            if (strategy == null || HasStrategyLabel(strategy)) continue;
+
+            Bounds bounds = default;
+            bool hasBounds = false;
+            foreach (Renderer renderer in strategy.GetComponentsInChildren<Renderer>(true))
+            {
+                if (!hasBounds) { bounds = renderer.bounds; hasBounds = true; }
+                else bounds.Encapsulate(renderer.bounds);
+            }
+
+            Vector3 position = hasBounds
+                ? bounds.center + Vector3.up * (bounds.extents.y + .25f)
+                : strategy.transform.position + Vector3.up * .25f;
+            GameObject label = P2Panel.CanvasRoot("A1_P5_" + (char)('A' + i) + "_StrategyLabel", new Vector2(560, 125), .00115f);
+            label.transform.SetParent(parent, true);
+            label.transform.position = position;
+            if (Camera.main != null)
+                label.transform.rotation = Quaternion.LookRotation(label.transform.position - Camera.main.transform.position, Vector3.up);
+            FloodLearningUI.Text("Text", label.transform, labels[i], 29, FontStyles.Bold, -8, 112,
+                TextAlignmentOptions.Center, 8);
+        }
+    }
+
+    static bool HasStrategyLabel(GameObject strategy)
+    {
+        foreach (TMP_Text text in strategy.GetComponentsInChildren<TMP_Text>(true))
+            if (!string.IsNullOrEmpty(text.text) && text.text.IndexOf("STRATEGY", StringComparison.OrdinalIgnoreCase) >= 0)
+                return true;
+        return false;
+    }
+
+    /// <summary>
+    /// Shows or hides the FBX houses used only by A1-P5. Inspector references
+    /// are optional; exact-name lookup also finds nested and inactive FBX
+    /// instances in the active scene.
+    /// </summary>
+    void SetP5Houses(bool active)
+    {
+        GameObject[] assigned = { houseA, houseB, houseE, houseF, houseG, houseH, houseI, houseJ, houseK };
+        string[] names = { "HOUSE_A", "HOUSE_B", "HOUSE_E", "HOUSE_F", "HOUSE_G", "HOUSE_H", "HOUSE_I", "HOUSE_J", "HOUSE_K" };
+        var touched = new System.Collections.Generic.HashSet<int>();
+
+        for (int i = 0; i < names.Length; i++)
+        {
+            if (assigned[i] != null)
+            {
+                assigned[i].SetActive(active);
+                touched.Add(assigned[i].GetInstanceID());
+            }
+
+            foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+            foreach (Transform child in root.GetComponentsInChildren<Transform>(true))
+            {
+                if (!string.Equals(child.name, names[i], StringComparison.OrdinalIgnoreCase)) continue;
+                if (touched.Add(child.gameObject.GetInstanceID())) child.gameObject.SetActive(active);
+            }
+        }
     }
 
     static void SetObjectActive(string objectName, bool active)
@@ -167,6 +267,7 @@ public sealed class A1P5ScenarioFlow : MonoBehaviour
     void OnDestroy()
     {
         SetP5ScenarioObjects(false);
+        SetP5Houses(false);
         questA?.Disable();
         questA?.Dispose();
         Cleanup(ref prompt); Cleanup(ref preview); Cleanup(ref previewHint);
@@ -174,88 +275,14 @@ public sealed class A1P5ScenarioFlow : MonoBehaviour
     }
 }
 
-/// <summary>Three procedural corridors with their material costs and benefits.</summary>
-public sealed class FloodResourceCorridorsScenarioA1P5 : MonoBehaviour
-{
-    Material corridorMaterial;
-    Material highlightMaterial;
-
-    void Awake()
-    {
-        Renderer terrain = FindRenderer("SM_Tutorial_Terrain_01");
-        if (terrain == null)
-        {
-            Debug.LogWarning("A1-P5 could not find SM_Tutorial_Terrain_01.", this);
-            return;
-        }
-        Bounds b = terrain.bounds;
-        float y = b.max.y + .055f;
-        Shader shader = Shader.Find("Universal Render Pipeline/Unlit");
-        if (shader == null) shader = Shader.Find("Sprites/Default");
-        corridorMaterial = new Material(shader) { color = new Color(.02f, .58f, 1f, .95f) };
-        highlightMaterial = new Material(shader) { color = new Color(.08f, .82f, 1f, .98f) };
-
-        CreateCorridor("Corridor_A", new[] { Point(b, .06f, .68f, y), Point(b, .35f, .62f, y), Point(b, .92f, .67f, y) }, corridorMaterial, .075f,
-            "CORRIDOR A\n100 m  |  40 buildings\n0.40 buildings / m", Point(b, .50f, .77f, y + .25f), 590);
-        CreateCorridor("Corridor_B", new[] { Point(b, .06f, .47f, y + .015f), Point(b, .32f, .43f, y + .015f), Point(b, .60f, .49f, y + .015f), Point(b, .92f, .45f, y + .015f) }, highlightMaterial, .09f,
-            "CORRIDOR B\n60 m  |  32 buildings\n0.53 buildings / m", Point(b, .49f, .30f, y + .25f), 590);
-        CreateCorridor("Corridor_C", new[] { Point(b, .06f, .25f, y), Point(b, .37f, .29f, y), Point(b, .92f, .23f, y) }, corridorMaterial, .075f,
-            "CORRIDOR C\n80 m  |  36 buildings\n0.45 buildings / m", Point(b, .50f, .13f, y + .25f), 590);
-    }
-
-    Vector3 Point(Bounds b, float x01, float z01, float y)
-    {
-        return new Vector3(Mathf.Lerp(b.min.x, b.max.x, x01), y, Mathf.Lerp(b.min.z, b.max.z, z01));
-    }
-
-    void CreateCorridor(string name, Vector3[] points, Material material, float width, string label, Vector3 labelPosition, float labelWidth)
-    {
-        GameObject lineObject = new GameObject(name, typeof(LineRenderer));
-        lineObject.transform.SetParent(transform, true);
-        LineRenderer line = lineObject.GetComponent<LineRenderer>();
-        line.useWorldSpace = true;
-        line.positionCount = points.Length;
-        line.SetPositions(points);
-        line.widthMultiplier = width;
-        line.numCornerVertices = 6;
-        line.numCapVertices = 6;
-        line.material = material;
-        CreateLabel(label, labelPosition, labelWidth);
-    }
-
-    void CreateLabel(string value, Vector3 position, float width)
-    {
-        GameObject canvas = P2Panel.CanvasRoot(value.Substring(0, 1) + "_Resource_Label", new Vector2(width, 125), .00115f);
-        canvas.transform.SetParent(transform, true);
-        canvas.transform.position = position;
-        if (Camera.main != null)
-            canvas.transform.rotation = Quaternion.LookRotation(canvas.transform.position - Camera.main.transform.position, Vector3.up);
-        FloodLearningUI.Text("Text", canvas.transform, value, 29, FontStyles.Bold, -8, 112, TextAlignmentOptions.Center, 8);
-    }
-
-    static Renderer FindRenderer(string name)
-    {
-        foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
-        foreach (Transform child in root.GetComponentsInChildren<Transform>(true))
-            if (child.name == name) return child.GetComponentInChildren<Renderer>(true);
-        return null;
-    }
-
-    void OnDestroy()
-    {
-        if (corridorMaterial != null) Destroy(corridorMaterial);
-        if (highlightMaterial != null) Destroy(highlightMaterial);
-    }
-}
-
 static class A1P5Panel
 {
     static readonly string[] Answers =
     {
-        "A) Corridor A, because it produces the largest absolute reduction.",
-        "B) Corridor B, because it produces the largest expected reduction per metre of barrier.",
-        "C) Corridor C, because its absolute and relative values are intermediate.",
-        "D) Corridor A, because wider corridors should always be protected first."
+        "A) Strategy A, with 2 buildings over 30 m.",
+        "B) Strategy B, with 3 buildings over 30 m.",
+        "C) Strategy C, with 4 buildings over 50 m.",
+        "D) Strategies A and C provide the same ratio."
     };
 
     public static GameObject CreateStartPrompt()
@@ -272,7 +299,7 @@ static class A1P5Panel
     {
         GameObject root = P2Panel.CanvasRoot("A1_P5_Build", new Vector2(1100, 390));
         FloodLearningUI.Text("Title", root.transform, "A1 - P5  |  Build protection", 39, FontStyles.Bold, -35, 58, TextAlignmentOptions.Center, 45);
-        FloodLearningUI.Text("Prompt", root.transform, "Build dykes for your answer anywhere on the terrain with the trigger.\nPoint at one and press Grip to destroy it. Press A when you are finished.", 30, FontStyles.Bold, -135, 125, TextAlignmentOptions.Center, 55).color = new Color(.35f, .82f, 1f);
+        FloodLearningUI.Text("Prompt", root.transform, "Rebuild one of the strategy dykes to protect the housing block and use the available material efficiently.\nBuild with the trigger. Point at a dyke and press Grip to destroy it. Press A when you are finished.", 30, FontStyles.Bold, -135, 155, TextAlignmentOptions.Center, 55).color = new Color(.35f, .82f, 1f);
         FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.1f);
         return root;
     }
@@ -281,8 +308,8 @@ static class A1P5Panel
     {
         GameObject root = P2Panel.CanvasRoot("Quiz_A1_P5", new Vector2(1600, 1180));
         FloodLearningUI.Text("Title", root.transform, "A1 - P5  |  Resource-Efficient Placement", 44, FontStyles.Bold, -28, 62, TextAlignmentOptions.Left, 55);
-        FloodLearningUI.Text("Scenario", root.transform, "You have enough material to protect only one of three flood-entry corridors.\nCorridor A: 100 m barrier required; expected reduction = 40 exposed buildings\nCorridor B: 60 m barrier required; expected reduction = 32 exposed buildings\nCorridor C: 80 m barrier required; expected reduction = 36 exposed buildings", 28, FontStyles.Normal, -105, 165, TextAlignmentOptions.TopLeft, 55);
-        FloodLearningUI.Text("Question", root.transform, "If barrier material is the primary constraint and protection efficiency is the objective, which corridor should be prioritized?", 32, FontStyles.Bold, -285, 95, TextAlignmentOptions.TopLeft, 55);
+        FloodLearningUI.Text("Scenario", root.transform, "A residential housing block needs protection. Three strategies produce the following outcomes:\nStrategy A: 30 m barrier, 2 buildings protected\nStrategy B: 30 m barrier, 3 buildings protected\nStrategy C: 50 m barrier, 4 buildings protected", 28, FontStyles.Normal, -105, 165, TextAlignmentOptions.TopLeft, 55);
+        FloodLearningUI.Text("Question", root.transform, "Which strategy protects the most buildings per metre of barrier?", 32, FontStyles.Bold, -285, 95, TextAlignmentOptions.TopLeft, 55);
         for (int i = 0; i < Answers.Length; i++)
         {
             int n = i;
@@ -322,11 +349,11 @@ static class A1P5Panel
             39, FontStyles.Bold, -105, 62, TextAlignmentOptions.Center, 65);
         result.color = answer == 1 ? new Color(.4f, 1f, .55f) : new Color(1f, .68f, .35f);
         FloodLearningUI.Text("Correct", root.transform,
-            "Correct answer: B) Corridor B, because it produces the largest expected reduction per metre of barrier.",
+            "Correct answer: B) Strategy B, with 3 buildings over 30 m.",
             31, FontStyles.Bold, -205, 120, TextAlignmentOptions.TopLeft, 70).color = new Color(.4f, 1f, .55f);
         FloodLearningUI.Text("ExplanationTitle", root.transform, "Explanation", 34, FontStyles.Bold, -370, 55, TextAlignmentOptions.Left, 70);
         FloodLearningUI.Text("Explanation", root.transform,
-            "A = 40 / 100 = 0.40\nB = 32 / 60 ≈ 0.53\nC = 36 / 80 = 0.45\n\nCorridor B gives the greatest reduction in exposure relative to the amount of barrier required.",
+            "Strategy A: 2 / 30 = 0.067 buildings/m\nStrategy B: 3 / 30 = 0.100 buildings/m\nStrategy C: 4 / 50 = 0.080 buildings/m\n\nStrategy B provides the highest protection per metre of barrier, even though Strategy C protects more buildings in total. This makes Strategy B the most resource-efficient placement strategy.",
             30, FontStyles.Normal, -435, 230, TextAlignmentOptions.TopLeft, 70);
         FloodLearningUI.Button("Finish", root.transform, "Finish", -735, 82, 29,
             () => { UnityEngine.Object.Destroy(root); onCompleted?.Invoke(); }, 360);

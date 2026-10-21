@@ -144,6 +144,7 @@ public sealed class A1P6ScenarioFlow : MonoBehaviour
     {
         SetObjectActive("A1P5_1", active);
         SetObjectActive("A1P5_2", active);
+        SetObjectActive("A1P5_3", active);
     }
 
     static void SetP6ScenarioObjects(bool active)
