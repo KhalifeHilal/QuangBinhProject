@@ -36,6 +36,7 @@ public sealed class A1P2ScenarioFlow : MonoBehaviour
 
     public void Begin(GameObject prefab, float previewSeconds, float simulationSeconds)
     {
+        FloodStudyLogger.BeginScenario("A1-P2", "Topography", previewSeconds);
         SetA1P2Houses(true);
         floodPrefab = prefab; viewingDuration = previewSeconds; floodDuration = simulationSeconds;
         questA ??= new InputAction("A1-P2 Continue", InputActionType.Button, "<XRController>{RightHand}/primaryButton");
@@ -67,12 +68,14 @@ public sealed class A1P2ScenarioFlow : MonoBehaviour
         preview = new GameObject("Scenario_A1_P2_BarrierAlignments");
         preview.AddComponent<FloodBarrierScenarioA1P2>();
         previewHint = ScenarioGuidanceOverlay.ShowObservation("Look at the possible barrier alignments", viewingDuration);
+        FloodStudyLogger.BeginObservation();
         elapsed = 0; phase = Phase.Preview;
     }
 
     void ShowQuestion()
     {
         CleanupObject(ref previewHint);
+        FloodStudyLogger.EndObservation();
         phase = Phase.Question;
         P2Panel.ShowQuestion(StartPreview, BeginDykeBuilding);
     }
@@ -80,6 +83,8 @@ public sealed class A1P2ScenarioFlow : MonoBehaviour
     void BeginDykeBuilding(int answer)
     {
         selectedAnswer = answer;
+        FloodStudyLogger.RecordAnswer(answer);
+        FloodStudyLogger.BeginBuildingPhase();
         CleanupObject(ref preview);
         SetDykeConstruction(true, maxDykes, minDykeLengthMeters, maxDykeLengthMeters, 0f);
         prompt = P2Panel.CreateBuildingPrompt();
@@ -98,11 +103,12 @@ public sealed class A1P2ScenarioFlow : MonoBehaviour
         activeFlood.name = "Scenario_A1_P2_WithParticipantDykes";
         simulation = activeFlood.GetComponent<TerrainFloodSimulation>();
         if (simulation == null) { Debug.LogError("TerrainFloodSimulation is missing.", this); return; }
-        simulation.Begin(); elapsed = 0; phase = Phase.Flood;
+        simulation.Begin(); FloodStudyLogger.EndBuildingPhase(); FloodStudyLogger.BeginSimulation(); elapsed = 0; phase = Phase.Flood;
     }
 
     void FinishFlood()
     {
+        FloodStudyLogger.EndSimulation(simulation);
         simulation?.StopSimulation(); CleanupObject(ref activeFlood);
         // Keep the participant's dykes and scenario buildings visible through
         // the confidence and written-feedback screens. They are cleaned up
@@ -117,6 +123,7 @@ public sealed class A1P2ScenarioFlow : MonoBehaviour
             new[] { "A1P2_Solution" }, () =>
         {
             SetA1P2Houses(false);
+            FloodStudyLogger.EndScenario();
             StartA1P3();
         });
     }
@@ -183,7 +190,7 @@ public sealed class A1P2ScenarioFlow : MonoBehaviour
     }
 
     static void CleanupObject(ref GameObject target) { if (target != null) UnityEngine.Object.Destroy(target); target = null; }
-    void OnDestroy() { SetA1P2Houses(false); questA?.Disable(); questA?.Dispose(); CleanupObject(ref prompt); CleanupObject(ref preview); CleanupObject(ref previewHint); CleanupObject(ref waterDirectionHint); CleanupObject(ref activeFlood); }
+    void OnDestroy() { FloodStudyLogger.EndScenario(); SetA1P2Houses(false); questA?.Disable(); questA?.Dispose(); CleanupObject(ref prompt); CleanupObject(ref preview); CleanupObject(ref previewHint); CleanupObject(ref waterDirectionHint); CleanupObject(ref activeFlood); }
 }
 
 public sealed class FloodBarrierScenarioA1P2 : MonoBehaviour
@@ -313,7 +320,7 @@ static class ScenarioFeedbackStage
         string safeName = scenarioTitle.Replace("|", "_").Replace(" ", "_");
         panel = P2Panel.CanvasRoot("FeedbackScenario_" + safeName, new Vector2(1300, 520));
         ScenarioFeedbackStageController controller = panel.AddComponent<ScenarioFeedbackStageController>();
-        controller.Begin(floodPrefab, simulationDuration);
+        controller.Begin(floodPrefab, simulationDuration, ScenarioIdFromTitle(scenarioTitle), activeSolutionNames);
         FloodLearningUI.Text("Title", panel.transform, scenarioTitle + "  |  Feedback scenario", 40,
             FontStyles.Bold, -35, 60, TextAlignmentOptions.Center, 45);
         FloodLearningUI.Text("ParticipantBarriers", panel.transform,
@@ -348,6 +355,14 @@ static class ScenarioFeedbackStage
         SetSolutionObjectsActive(activeSolutionNames, false);
         activeSolutionNames = null;
         panel = null;
+    }
+
+    static string ScenarioIdFromTitle(string title)
+    {
+        if (string.IsNullOrEmpty(title)) return "UnknownScenario";
+        int separator = title.IndexOf('|');
+        string prefix = separator >= 0 ? title.Substring(0, separator) : title;
+        return prefix.Replace(" ", string.Empty);
     }
 
     static void MakeParticipantDykesTransparent()
@@ -422,15 +437,19 @@ sealed class ScenarioFeedbackStageController : MonoBehaviour
     GameObject floodPrefab;
     TerrainFloodSimulation simulation;
     InputAction questA;
+    string scenarioId;
+    string[] solutionObjectNames;
     float simulationDuration;
     float elapsed;
     bool waitingForStart;
     public bool SimulationFinished { get; private set; }
     public event Action SimulationFinishedChanged;
 
-    public void Begin(GameObject floodPrefab, float duration)
+    public void Begin(GameObject floodPrefab, float duration, string scenarioId, string[] solutionObjectNames)
     {
         this.floodPrefab = floodPrefab;
+        this.scenarioId = scenarioId;
+        this.solutionObjectNames = solutionObjectNames ?? System.Array.Empty<string>();
         simulationDuration = Mathf.Max(0f, duration);
         elapsed = 0f;
         waitingForStart = true;
@@ -441,6 +460,7 @@ sealed class ScenarioFeedbackStageController : MonoBehaviour
         if (floodPrefab == null)
         {
             Debug.LogWarning("Feedback scenario has no flood prefab assigned.", this);
+            FloodStudyLogger.CaptureTopDownScreenshot(this.scenarioId, "feedback_end", this.solutionObjectNames);
             waitingForStart = false;
             SimulationFinished = true;
             return;
@@ -457,6 +477,7 @@ sealed class ScenarioFeedbackStageController : MonoBehaviour
         if (simulation == null)
         {
             Debug.LogError("TerrainFloodSimulation is missing on the feedback flood prefab.", this);
+            FloodStudyLogger.CaptureTopDownScreenshot(scenarioId, "feedback_end", solutionObjectNames);
             Destroy(activeFlood);
             activeFlood = null;
             SimulationFinished = true;
@@ -490,6 +511,9 @@ sealed class ScenarioFeedbackStageController : MonoBehaviour
 
     void StopSimulationAtDuration()
     {
+        // Capture while the final feedback water state and both the
+        // transparent participant dykes and model solution are still present.
+        FloodStudyLogger.CaptureTopDownScreenshot(scenarioId, "feedback_end", solutionObjectNames);
         simulation?.StopSimulation();
         if (activeFlood != null) Destroy(activeFlood);
         activeFlood = null;
@@ -525,7 +549,7 @@ static class GeneralDiscomfortSurvey
 {
     static GameObject panel;
 
-    public static void Show(Action onCompleted)
+    public static void Show(string measurementId, Action onCompleted)
     {
         Close();
         FloodAudio.PlayGeneralDiscomfort();
@@ -562,6 +586,7 @@ static class GeneralDiscomfortSurvey
             {
                 int score = Mathf.RoundToInt(slider.value);
                 Debug.Log($"General discomfort score: {score}/20");
+                FloodStudyLogger.RecordGeneralDiscomfort(measurementId, score);
                 Close();
                 onCompleted?.Invoke();
             }, 360);

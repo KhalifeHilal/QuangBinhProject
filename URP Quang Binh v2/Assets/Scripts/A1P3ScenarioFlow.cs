@@ -36,6 +36,7 @@ public sealed class A1P3ScenarioFlow : MonoBehaviour
 
     public void Begin(GameObject prefab, float previewSeconds, float simulationSeconds)
     {
+        FloodStudyLogger.BeginScenario("A1-P3", "Barrier Continuity & Bypassing", previewSeconds);
         SetHospital(true, true);
         SetA1P3Houses(true);
         floodPrefab = prefab;
@@ -70,6 +71,7 @@ public sealed class A1P3ScenarioFlow : MonoBehaviour
         preview = new GameObject("Scenario_A1_P3_WesternEndpointBypass");
         preview.AddComponent<FloodBarrierScenarioA1P3>();
         previewHint = ScenarioGuidanceOverlay.ShowObservation("Observe what happens around the barrier", viewingDuration);
+        FloodStudyLogger.BeginObservation();
         elapsed = 0f;
         phase = Phase.Preview;
     }
@@ -77,6 +79,7 @@ public sealed class A1P3ScenarioFlow : MonoBehaviour
     void ShowQuestion()
     {
         Cleanup(ref previewHint);
+        FloodStudyLogger.EndObservation();
         phase = Phase.Question;
         P3Panel.ShowQuestion(StartPreview, BeginDykeBuilding);
     }
@@ -84,6 +87,8 @@ public sealed class A1P3ScenarioFlow : MonoBehaviour
     void BeginDykeBuilding(int answer)
     {
         selectedAnswer = answer;
+        FloodStudyLogger.RecordAnswer(answer);
+        FloodStudyLogger.BeginBuildingPhase();
         Cleanup(ref preview);
         SetDykeConstruction(true, maxDykes, minDykeLengthMeters, maxDykeLengthMeters, 0f);
         prompt = P3Panel.CreateBuildingPrompt();
@@ -102,12 +107,15 @@ public sealed class A1P3ScenarioFlow : MonoBehaviour
         simulation = activeFlood.GetComponent<TerrainFloodSimulation>();
         if (simulation == null) { Debug.LogError("TerrainFloodSimulation is missing.", this); return; }
         simulation.Begin();
+        FloodStudyLogger.EndBuildingPhase();
+        FloodStudyLogger.BeginSimulation();
         elapsed = 0f;
         phase = Phase.Flood;
     }
 
     void FinishFlood()
     {
+        FloodStudyLogger.EndSimulation(simulation);
         simulation?.StopSimulation();
         Cleanup(ref activeFlood);
         // Keep the participant's dykes and scenario buildings visible through
@@ -124,7 +132,8 @@ public sealed class A1P3ScenarioFlow : MonoBehaviour
         {
             SetHospital(false);
             SetA1P3Houses(false);
-            GeneralDiscomfortSurvey.Show(StartA1P4);
+            FloodStudyLogger.EndScenario();
+            GeneralDiscomfortSurvey.Show("before_A1_P4", StartA1P4);
         });
     }
 
@@ -224,6 +233,7 @@ public sealed class A1P3ScenarioFlow : MonoBehaviour
 
     void OnDestroy()
     {
+        FloodStudyLogger.EndScenario();
         SetHospital(false);
         SetA1P3Houses(false);
         questA?.Disable(); questA?.Dispose();

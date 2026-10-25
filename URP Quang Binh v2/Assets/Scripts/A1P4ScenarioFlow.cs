@@ -41,6 +41,7 @@ public sealed class A1P4ScenarioFlow : MonoBehaviour
 
     public void Begin(GameObject prefab, float previewSeconds, float simulationSeconds)
     {
+        FloodStudyLogger.BeginScenario("A1-P4", "Water Redistribution", previewSeconds);
         SetA1P4Houses(true);
         SetHospital(true);
         floodPrefab = prefab;
@@ -76,6 +77,7 @@ public sealed class A1P4ScenarioFlow : MonoBehaviour
         preview = new GameObject("Scenario_A1_P4_WaterRedistribution");
         preview.AddComponent<FloodRedistributionScenarioA1P4>();
         previewHint = ScenarioGuidanceOverlay.ShowObservation("Observe how water accumulates and redistributes", viewingDuration);
+        FloodStudyLogger.BeginObservation();
         elapsed = 0f;
         phase = Phase.Preview;
     }
@@ -83,6 +85,7 @@ public sealed class A1P4ScenarioFlow : MonoBehaviour
     void ShowQuestion()
     {
         Cleanup(ref previewHint);
+        FloodStudyLogger.EndObservation();
         phase = Phase.Question;
         A1P4Panel.ShowQuestion(StartPreview, BeginDykeBuilding);
     }
@@ -90,6 +93,8 @@ public sealed class A1P4ScenarioFlow : MonoBehaviour
     void BeginDykeBuilding(int answer)
     {
         selectedAnswer = answer;
+        FloodStudyLogger.RecordAnswer(answer);
+        FloodStudyLogger.BeginBuildingPhase();
         Cleanup(ref preview);
         SetDykeConstruction(true, maxDykes, minDykeLengthMeters, maxDykeLengthMeters, 0f);
         prompt = A1P4Panel.CreateBuildingPrompt();
@@ -116,12 +121,15 @@ public sealed class A1P4ScenarioFlow : MonoBehaviour
             return;
         }
         simulation.Begin();
+        FloodStudyLogger.EndBuildingPhase();
+        FloodStudyLogger.BeginSimulation();
         elapsed = 0f;
         phase = Phase.Flood;
     }
 
     void FinishFlood()
     {
+        FloodStudyLogger.EndSimulation(simulation);
         simulation?.StopSimulation();
         Cleanup(ref activeFlood);
         // Keep the participant's dykes and scenario buildings visible through
@@ -138,6 +146,7 @@ public sealed class A1P4ScenarioFlow : MonoBehaviour
         {
             SetA1P4Houses(false);
             SetHospital(false);
+            FloodStudyLogger.EndScenario();
             StartA1P5();
         });
     }
@@ -235,6 +244,7 @@ public sealed class A1P4ScenarioFlow : MonoBehaviour
 
     void OnDestroy()
     {
+        FloodStudyLogger.EndScenario();
         SetA1P4Houses(false);
         SetHospital(false);
         questA?.Disable();

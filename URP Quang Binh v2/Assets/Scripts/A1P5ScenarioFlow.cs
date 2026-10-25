@@ -42,6 +42,7 @@ public sealed class A1P5ScenarioFlow : MonoBehaviour
 
     public void Begin(GameObject prefab, float previewSeconds, float simulationSeconds)
     {
+        FloodStudyLogger.BeginScenario("A1-P5", "Resource-Efficient Placement", previewSeconds);
         SetP5ScenarioObjects(true);
         SetP5Houses(true);
         floodPrefab = prefab;
@@ -80,6 +81,7 @@ public sealed class A1P5ScenarioFlow : MonoBehaviour
         preview = new GameObject("Scenario_A1_P5_AuthoredStrategies");
         CreateStrategyLabels(preview.transform);
         previewHint = ScenarioGuidanceOverlay.ShowObservation("Compare protection gained per metre of barrier", viewingDuration);
+        FloodStudyLogger.BeginObservation();
         elapsed = 0f;
         phase = Phase.Preview;
     }
@@ -87,6 +89,7 @@ public sealed class A1P5ScenarioFlow : MonoBehaviour
     void ShowQuestion()
     {
         Cleanup(ref previewHint);
+        FloodStudyLogger.EndObservation();
         phase = Phase.Question;
         A1P5Panel.ShowQuestion(StartPreview, BeginDykeBuilding);
     }
@@ -94,6 +97,8 @@ public sealed class A1P5ScenarioFlow : MonoBehaviour
     void BeginDykeBuilding(int answer)
     {
         selectedAnswer = answer;
+        FloodStudyLogger.RecordAnswer(answer);
+        FloodStudyLogger.BeginBuildingPhase();
         Cleanup(ref preview);
         // Hide the authored strategy dykes and their labels before the
         // participant builds one of the strategies themselves.
@@ -123,12 +128,15 @@ public sealed class A1P5ScenarioFlow : MonoBehaviour
             return;
         }
         simulation.Begin();
+        FloodStudyLogger.EndBuildingPhase();
+        FloodStudyLogger.BeginSimulation();
         elapsed = 0f;
         phase = Phase.Flood;
     }
 
     void FinishFlood()
     {
+        FloodStudyLogger.EndSimulation(simulation);
         simulation?.StopSimulation();
         Cleanup(ref activeFlood);
         // Keep the participant's dyke and scenario buildings visible through
@@ -145,6 +153,7 @@ public sealed class A1P5ScenarioFlow : MonoBehaviour
         {
             SetP5ScenarioObjects(false);
             SetP5Houses(false);
+            FloodStudyLogger.EndScenario();
             StartA1P6();
         });
     }
@@ -286,6 +295,7 @@ public sealed class A1P5ScenarioFlow : MonoBehaviour
 
     void OnDestroy()
     {
+        FloodStudyLogger.EndScenario();
         SetP5ScenarioObjects(false);
         SetP5Houses(false);
         questA?.Disable();

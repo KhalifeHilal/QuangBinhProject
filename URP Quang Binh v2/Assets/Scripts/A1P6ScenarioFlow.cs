@@ -44,6 +44,7 @@ public sealed class A1P6ScenarioFlow : MonoBehaviour
 
     public void Begin(GameObject prefab, float previewSeconds, float simulationSeconds)
     {
+        FloodStudyLogger.BeginScenario("A1-P6", "System-Level Consequences", previewSeconds);
         SetP5ScenarioObjects(false);
         // The old A1P6_1/A1P6_2 procedural comparison is not used here.
         SetP6ScenarioObjects(false);
@@ -91,6 +92,7 @@ public sealed class A1P6ScenarioFlow : MonoBehaviour
         preview = new GameObject("Scenario_A1_P6_PriorityLabels");
         CreatePriorityLabels(preview.transform);
         previewHint = ScenarioGuidanceOverlay.ShowObservation("Compare building priorities and the consequences of redirected water", viewingDuration);
+        FloodStudyLogger.BeginObservation();
         elapsed = 0f;
         phase = Phase.Preview;
     }
@@ -98,6 +100,7 @@ public sealed class A1P6ScenarioFlow : MonoBehaviour
     void ShowQuestion()
     {
         Cleanup(ref previewHint);
+        FloodStudyLogger.EndObservation();
         phase = Phase.Question;
         A1P6Panel.ShowQuestion(StartPreview, BeginDykeBuilding);
     }
@@ -105,6 +108,8 @@ public sealed class A1P6ScenarioFlow : MonoBehaviour
     void BeginDykeBuilding(int answer)
     {
         selectedAnswer = answer;
+        FloodStudyLogger.RecordAnswer(answer);
+        FloodStudyLogger.BeginBuildingPhase();
         Cleanup(ref preview);
         SetDykeConstruction(true, maxDykes, maxTotalDykeLengthMeters);
         prompt = A1P6Panel.CreateBuildingPrompt();
@@ -131,12 +136,15 @@ public sealed class A1P6ScenarioFlow : MonoBehaviour
             return;
         }
         simulation.Begin();
+        FloodStudyLogger.EndBuildingPhase();
+        FloodStudyLogger.BeginSimulation();
         elapsed = 0f;
         phase = Phase.Flood;
     }
 
     void FinishFlood()
     {
+        FloodStudyLogger.EndSimulation(simulation);
         simulation?.StopSimulation();
         Cleanup(ref activeFlood);
         // Keep the participant's dykes and scenario buildings visible through
@@ -153,7 +161,8 @@ public sealed class A1P6ScenarioFlow : MonoBehaviour
         {
             SetP6ScenarioObjects(false);
             SetP6Buildings(false);
-            GeneralDiscomfortSurvey.Show(ParticipationEndUI.Show);
+            FloodStudyLogger.EndScenario();
+            GeneralDiscomfortSurvey.Show("after_A1_P6", ParticipationEndUI.Show);
         });
     }
 
@@ -282,6 +291,7 @@ public sealed class A1P6ScenarioFlow : MonoBehaviour
 
     void OnDestroy()
     {
+        FloodStudyLogger.EndScenario();
         SetP6ScenarioObjects(false);
         SetP6Buildings(false);
         questA?.Disable();

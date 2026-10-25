@@ -245,6 +245,7 @@ public class DykeManagerTutorial : MonoBehaviour
         if (scenarioDyke != null)
         {
             SetHoveredScenarioDyke(null);
+            FloodStudyLogger.RecordDykeDestroyed(scenarioDyke.GetComponent<ScenarioDykeLength>());
             FloodAudio.PlayDykeRemoved();
             Destroy(scenarioDyke.gameObject);
         }
@@ -381,6 +382,7 @@ public class DykeManagerTutorial : MonoBehaviour
             dyke.AddComponent<A1P1ScenarioDyke>();
             ScenarioDykeLength length = dyke.AddComponent<ScenarioDykeLength>();
             length.lengthMeters = horizontalDistance;
+            length.dykeId = FloodStudyLogger.RecordDykeBuilt(startPoint, endPoint, horizontalDistance);
         }
 
         // AddInteraction(dyke);
@@ -474,9 +476,11 @@ public class DykeManagerTutorial : MonoBehaviour
             interaction.firstHoverEntered.RemoveListener(HoverEnterInteraction);
             interaction.hoverExited.RemoveListener(HoverExitInteraction);
 
+            ScenarioDykeLength length = interaction.gameObject.GetComponent<ScenarioDykeLength>();
             Destroy(interaction.gameObject);
 
             dykeDestroyed++;
+            FloodStudyLogger.RecordDykeDestroyed(length);
             FloodAudio.PlayDykeRemoved();
         }
     }
@@ -502,4 +506,5 @@ public class DykeManagerTutorial : MonoBehaviour
 sealed class ScenarioDykeLength : MonoBehaviour
 {
     public float lengthMeters;
+    public int dykeId;
 }

@@ -43,6 +43,7 @@ public sealed class PlayMakerTerrainFloodScenario03 : MonoBehaviour
     /// <summary>Starts A1-P1 directly without waiting for the PlayMaker tutorial.</summary>
     public void BeginDebug(GameObject prefab, float previewSeconds, float simulationSeconds)
     {
+        FloodStudyLogger.BeginScenario("A1-P1", "Floodway Path Identification", previewSeconds);
         floodPrefab = prefab;
         pathwayViewingDuration = previewSeconds;
         duration = simulationSeconds;
@@ -54,6 +55,7 @@ public sealed class PlayMakerTerrainFloodScenario03 : MonoBehaviour
     /// <summary>Arms A1-P1 after the tutorial has completed, without overlapping it.</summary>
     public void BeginAfterTutorial(GameObject prefab, float previewSeconds, float simulationSeconds)
     {
+        FloodStudyLogger.BeginScenario("A1-P1", "Floodway Path Identification", previewSeconds);
         floodPrefab = prefab;
         pathwayViewingDuration = previewSeconds;
         duration = simulationSeconds;
@@ -102,6 +104,7 @@ public sealed class PlayMakerTerrainFloodScenario03 : MonoBehaviour
         activeScenario.transform.SetParent(parent, false);
         activeScenario.AddComponent<FloodPathwayScenarioA1P1>();
         observationHint = ScenarioGuidanceOverlay.ShowObservation("Look at the pathways", pathwayViewingDuration);
+        FloodStudyLogger.BeginObservation();
         elapsed = 0;
         phase = Phase.Preview;
     }
@@ -110,6 +113,7 @@ public sealed class PlayMakerTerrainFloodScenario03 : MonoBehaviour
     {
         // The pathways remain visible behind the question.
         if (observationHint != null) Destroy(observationHint);
+        FloodStudyLogger.EndObservation();
         ClearDykeManagerChildren();
         phase = Phase.Question;
         FloodScenarioQuizPanel.Show(RepeatScenario, SubmitAnswerWithoutDykes);
@@ -124,6 +128,7 @@ public sealed class PlayMakerTerrainFloodScenario03 : MonoBehaviour
     void SubmitAnswerWithoutDykes(int answer)
     {
         selectedAnswer = answer;
+        FloodStudyLogger.RecordAnswer(answer);
         if (activeScenario != null) Destroy(activeScenario);
         activeScenario = null;
         ClearDykeManagerChildren();
@@ -157,11 +162,13 @@ public sealed class PlayMakerTerrainFloodScenario03 : MonoBehaviour
 
         simulation.Begin();
         elapsed = 0;
+        FloodStudyLogger.BeginSimulation();
         phase = Phase.Running;
     }
 
     void FinishSimulation()
     {
+        FloodStudyLogger.EndSimulation(simulation);
         simulation?.StopSimulation();
         if (activeFlood != null) Destroy(activeFlood);
         activeFlood = null;
@@ -174,6 +181,7 @@ public sealed class PlayMakerTerrainFloodScenario03 : MonoBehaviour
 
     void StartA1P2()
     {
+        FloodStudyLogger.EndScenario();
         A1P2ScenarioFlow flow = gameObject.GetComponent<A1P2ScenarioFlow>();
         if (flow == null) flow = gameObject.AddComponent<A1P2ScenarioFlow>();
         flow.Begin(floodPrefab, pathwayViewingDuration, duration);
@@ -289,6 +297,7 @@ public sealed class PlayMakerTerrainFloodScenario03 : MonoBehaviour
 
     void OnDestroy()
     {
+        FloodStudyLogger.EndScenario();
         SetA1P1Houses(false);
         questA?.Disable(); questA?.Dispose();
         if (continuePrompt != null) Destroy(continuePrompt);

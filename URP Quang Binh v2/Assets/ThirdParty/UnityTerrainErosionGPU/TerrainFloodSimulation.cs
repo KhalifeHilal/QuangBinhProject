@@ -143,6 +143,59 @@ public sealed class TerrainFloodSimulation : MonoBehaviour
 
     public void StopSimulation() => running = false;
 
+    /// <summary>
+    /// Reads the current GPU water state once for study logging. The returned
+    /// values are world-space water depths in metres, indexed row-major by the
+    /// simulation grid. This is intended for end-of-simulation sampling only;
+    /// it is not used by the real-time solver.
+    /// </summary>
+    public bool TryCaptureWaterDepthMap(out float[] depths)
+    {
+        depths = null;
+        if (state == null || !state.IsCreated()) return false;
+
+        RenderTexture previous = RenderTexture.active;
+        Texture2D snapshot = null;
+        try
+        {
+            RenderTexture.active = state;
+            snapshot = new Texture2D(resolution, resolution, TextureFormat.RGBAFloat, false, true);
+            snapshot.ReadPixels(new Rect(0, 0, resolution, resolution), 0, 0, false);
+            snapshot.Apply(false, false);
+            Color[] pixels = snapshot.GetPixels();
+            depths = new float[pixels.Length];
+            float worldHeightScale = Mathf.Abs(heightScale * transform.lossyScale.y);
+            for (int i = 0; i < pixels.Length; i++) depths[i] = Mathf.Max(0f, pixels[i].g * worldHeightScale);
+            return true;
+        }
+        catch (System.Exception exception)
+        {
+            Debug.LogWarning("Flood water depth logging was unavailable: " + exception.Message, this);
+            depths = null;
+            return false;
+        }
+        finally
+        {
+            RenderTexture.active = previous;
+            if (snapshot != null) Destroy(snapshot);
+        }
+    }
+
+    /// <summary>Samples a previously captured depth map at a world position.</summary>
+    public bool TryGetWaterDepthAtWorldPosition(float[] depths, Vector3 worldPosition, out float depth)
+    {
+        depth = 0f;
+        if (depths == null || depths.Length != resolution * resolution) return false;
+        Vector3 local = transform.InverseTransformPoint(worldPosition);
+        float u = local.x / Mathf.Max(worldSize.x, 0.0001f) + .5f;
+        float v = local.z / Mathf.Max(worldSize.y, 0.0001f) + .5f;
+        if (u < 0f || u > 1f || v < 0f || v > 1f) return false;
+        int x = Mathf.Clamp(Mathf.FloorToInt(u * resolution), 0, resolution - 1);
+        int y = Mathf.Clamp(Mathf.FloorToInt(v * resolution), 0, resolution - 1);
+        depth = depths[y * resolution + x];
+        return true;
+    }
+
     void CreateResources()
     {
         ReleaseResources();
