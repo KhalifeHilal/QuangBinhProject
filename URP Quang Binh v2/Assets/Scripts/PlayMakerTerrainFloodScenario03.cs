@@ -12,7 +12,7 @@ public sealed class PlayMakerTerrainFloodScenario03 : MonoBehaviour
     [SerializeField] GameObject houseB;
     [SerializeField] GameObject houseC;
     [SerializeField] GameObject houseD;
-    [SerializeField] float duration = 25f;
+    [SerializeField] float duration = 20f;
     [SerializeField] float pathwayViewingDuration = 15f;
     PlayMakerFSM tutorial;
     InputAction questA;

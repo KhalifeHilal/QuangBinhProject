@@ -25,7 +25,7 @@ public sealed class FloodScenarioDebugLauncher : MonoBehaviour
 
     [Header("Test Durations")]
     [Min(1f)] [SerializeField] float previewDuration = 15f;
-    [Min(1f)] [SerializeField] float floodDuration = 25f;
+    [Min(1f)] [SerializeField] float floodDuration = 20f;
 
     [Header("Tutorial gate")]
     [SerializeField] string tutorialObjectName = "Tutorial_Manager";
