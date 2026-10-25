@@ -109,11 +109,21 @@ public sealed class A1P3ScenarioFlow : MonoBehaviour
     {
         simulation?.StopSimulation();
         Cleanup(ref activeFlood);
-        ClearDykes();
-        SetHospital(false);
-        SetA1P3Houses(false);
+        // Keep the participant's dykes and scenario buildings visible through
+        // the confidence and written-feedback screens. They are cleaned up
+        // after the separate feedback scenario.
         phase = Phase.Confidence;
-        P3Panel.ShowConfidence(selectedAnswer, StartA1P4);
+        P3Panel.ShowConfidence(selectedAnswer, StartFeedbackScenario);
+    }
+
+    void StartFeedbackScenario()
+    {
+        ScenarioFeedbackStage.Show("A1 - P3 | Barrier Continuity", () =>
+        {
+            SetHospital(false);
+            SetA1P3Houses(false);
+            StartA1P4();
+        });
     }
 
     void StartA1P4()

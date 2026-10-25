@@ -130,11 +130,21 @@ public sealed class A1P5ScenarioFlow : MonoBehaviour
     {
         simulation?.StopSimulation();
         Cleanup(ref activeFlood);
-        ClearDykes();
-        SetP5ScenarioObjects(false);
-        SetP5Houses(false);
+        // Keep the participant's dyke and scenario buildings visible through
+        // the confidence and written-feedback screens. They are cleaned up
+        // after the separate feedback scenario.
         phase = Phase.Confidence;
-        A1P5Panel.ShowConfidence(selectedAnswer, StartA1P6);
+        A1P5Panel.ShowConfidence(selectedAnswer, StartFeedbackScenario);
+    }
+
+    void StartFeedbackScenario()
+    {
+        ScenarioFeedbackStage.Show("A1 - P5 | Resource-Efficient Placement", () =>
+        {
+            SetP5ScenarioObjects(false);
+            SetP5Houses(false);
+            StartA1P6();
+        });
     }
 
     void StartA1P6()

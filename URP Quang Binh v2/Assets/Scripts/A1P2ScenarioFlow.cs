@@ -102,10 +102,21 @@ public sealed class A1P2ScenarioFlow : MonoBehaviour
 
     void FinishFlood()
     {
-        simulation?.StopSimulation(); CleanupObject(ref activeFlood); ClearDykeManagerChildren();
-        SetA1P2Houses(false);
+        simulation?.StopSimulation(); CleanupObject(ref activeFlood);
+        // Keep the participant's dykes and scenario buildings visible through
+        // the confidence and written-feedback screens. They are cleaned up
+        // after the separate feedback scenario.
         phase = Phase.Confidence;
-        P2Panel.ShowConfidence(selectedAnswer, StartA1P3);
+        P2Panel.ShowConfidence(selectedAnswer, StartFeedbackScenario);
+    }
+
+    void StartFeedbackScenario()
+    {
+        ScenarioFeedbackStage.Show("A1 - P2 | Topography", () =>
+        {
+            SetA1P2Houses(false);
+            StartA1P3();
+        });
     }
 
     void StartA1P3()
@@ -268,5 +279,93 @@ static class P2Panel
         GameObject root = new GameObject(name, typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(TrackedDeviceGraphicRaycaster), typeof(Image));
         root.GetComponent<Canvas>().renderMode = RenderMode.WorldSpace; root.GetComponent<Canvas>().sortingOrder = 200;
         RectTransform rect = (RectTransform)root.transform; rect.sizeDelta = size; rect.localScale = Vector3.one * scale; Image image = root.GetComponent<Image>(); FloodLearningUIStyle.ApplyPanel(image); image.raycastTarget = false; return root;
+    }
+}
+
+/// <summary>
+/// Displays the participant's built barriers after the written feedback. The
+/// barriers stay in the scene and are made translucent so a model solution can
+/// be added alongside them later.
+/// </summary>
+static class ScenarioFeedbackStage
+{
+    static GameObject panel;
+
+    public static void Show(string scenarioTitle, Action onCompleted)
+    {
+        Close();
+        MakeParticipantDykesTransparent();
+
+        string safeName = scenarioTitle.Replace("|", "_").Replace(" ", "_");
+        panel = P2Panel.CanvasRoot("FeedbackScenario_" + safeName, new Vector2(1300, 520));
+        FloodLearningUI.Text("Title", panel.transform, scenarioTitle + "  |  Feedback scenario", 40,
+            FontStyles.Bold, -35, 60, TextAlignmentOptions.Center, 45);
+        FloodLearningUI.Text("ParticipantBarriers", panel.transform,
+            "Your barriers are shown transparently on the terrain.", 32,
+            FontStyles.Normal, -135, 60, TextAlignmentOptions.Center, 55);
+        FloodLearningUI.Text("ModelSolution", panel.transform,
+            "Model solution: to be added.", 30,
+            FontStyles.Normal, -225, 60, TextAlignmentOptions.Center, 55);
+        FloodLearningUI.Button("Continue", panel.transform, "Continue", -375, 82, 29,
+            () =>
+            {
+                Close();
+                ClearParticipantDykes();
+                onCompleted?.Invoke();
+            }, 360);
+        FloodLearningUI.PlaceInFrontOfPlayer(panel.transform, 2.2f);
+    }
+
+    public static void Close()
+    {
+        if (panel != null) UnityEngine.Object.Destroy(panel);
+        panel = null;
+    }
+
+    static void MakeParticipantDykesTransparent()
+    {
+        DykeManagerTutorial manager = UnityEngine.Object.FindFirstObjectByType<DykeManagerTutorial>(FindObjectsInactive.Include);
+        if (manager == null) return;
+
+        manager.enabled = false;
+        manager.freePlacement = false;
+        manager.ClearFreePlacementLimits();
+        foreach (Renderer renderer in manager.GetComponentsInChildren<Renderer>(true))
+        {
+            Material[] materials = renderer.materials;
+            foreach (Material material in materials)
+                MakeMaterialTransparent(material, .38f);
+            renderer.materials = materials;
+        }
+    }
+
+    static void MakeMaterialTransparent(Material material, float alpha)
+    {
+        if (material == null) return;
+        Color color = material.HasProperty("_BaseColor") ? material.GetColor("_BaseColor") : material.color;
+        color.a = alpha;
+        if (material.HasProperty("_BaseColor")) material.SetColor("_BaseColor", color);
+        if (material.HasProperty("_Color")) material.SetColor("_Color", color);
+
+        if (material.HasProperty("_Surface")) material.SetFloat("_Surface", 1f);
+        if (material.HasProperty("_Blend")) material.SetFloat("_Blend", 0f);
+        if (material.HasProperty("_SrcBlend")) material.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
+        if (material.HasProperty("_DstBlend")) material.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+        if (material.HasProperty("_ZWrite")) material.SetFloat("_ZWrite", 0f);
+        material.SetOverrideTag("RenderType", "Transparent");
+        material.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+        material.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+        material.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+    }
+
+    static void ClearParticipantDykes()
+    {
+        DykeManagerTutorial manager = UnityEngine.Object.FindFirstObjectByType<DykeManagerTutorial>(FindObjectsInactive.Include);
+        if (manager == null) return;
+        manager.enabled = false;
+        manager.freePlacement = false;
+        manager.ClearFreePlacementLimits();
+        for (int i = manager.transform.childCount - 1; i >= 0; i--)
+            UnityEngine.Object.Destroy(manager.transform.GetChild(i).gameObject);
     }
 }

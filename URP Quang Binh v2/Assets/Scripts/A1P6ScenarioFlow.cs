@@ -135,11 +135,20 @@ public sealed class A1P6ScenarioFlow : MonoBehaviour
     {
         simulation?.StopSimulation();
         Cleanup(ref activeFlood);
-        ClearDykes();
-        SetP6ScenarioObjects(false);
-        SetP6Buildings(false);
+        // Keep the participant's dykes and scenario buildings visible through
+        // the confidence and written-feedback screens. They are cleaned up
+        // after the separate feedback scenario.
         phase = Phase.Confidence;
-        A1P6Panel.ShowConfidence(selectedAnswer);
+        A1P6Panel.ShowConfidence(selectedAnswer, StartFeedbackScenario);
+    }
+
+    void StartFeedbackScenario()
+    {
+        ScenarioFeedbackStage.Show("A1 - P6 | System-Level Consequences", () =>
+        {
+            SetP6ScenarioObjects(false);
+            SetP6Buildings(false);
+        });
     }
 
     static void SetDykeConstruction(bool enabled, int maxDykes, float maxTotalLengthMeters)
@@ -324,7 +333,7 @@ static class A1P6Panel
         FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.25f);
     }
 
-    public static void ShowConfidence(int answer)
+    public static void ShowConfidence(int answer, Action onCompleted = null)
     {
         GameObject root = P2Panel.CanvasRoot("Confidence_A1_P6", new Vector2(1500, 1080));
         GameObject group = FloodLearningUI.Group("ConfidenceGroup", root.transform);
@@ -340,11 +349,11 @@ static class A1P6Panel
         });
         FloodLearningUI.Text("Scale", group.transform, "Not confident                                      Moderately confident                                      Very confident", 23, FontStyles.Normal, -510, 55, TextAlignmentOptions.Center, 130).color = new Color(.75f, .85f, .95f);
         FloodLearningUI.Button("Confirm", group.transform, "Confirm confidence", -650, 95, 31,
-            () => ShowFeedback(root, answer, Mathf.RoundToInt(slider.value) * 20), 420);
+            () => ShowFeedback(root, answer, Mathf.RoundToInt(slider.value) * 20, onCompleted), 420);
         FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.25f);
     }
 
-    static void ShowFeedback(GameObject root, int answer, int confidence)
+    static void ShowFeedback(GameObject root, int answer, int confidence, Action onCompleted)
     {
         foreach (Transform child in root.transform) UnityEngine.Object.Destroy(child.gameObject);
         TMP_Text result = FloodLearningUI.Text("Result", root.transform,
@@ -359,7 +368,7 @@ static class A1P6Panel
             "Flood protection can change water storage and flow pathways. A barrier may protect one location but redirect or accumulate water in other areas. Therefore, the consequences for the whole system must be considered; not only the protected area.",
             29, FontStyles.Normal, -445, 235, TextAlignmentOptions.TopLeft, 70);
         FloodLearningUI.Button("Finish", root.transform, "Finish", -780, 82, 29,
-            () => UnityEngine.Object.Destroy(root), 360);
+            () => { UnityEngine.Object.Destroy(root); onCompleted?.Invoke(); }, 360);
         Debug.Log($"A1-P6 result: answer={(char)('A' + answer)}, correct={answer == 2}, confidence={confidence}");
     }
 }
