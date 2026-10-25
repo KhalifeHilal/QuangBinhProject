@@ -124,7 +124,7 @@ public sealed class A1P3ScenarioFlow : MonoBehaviour
         {
             SetHospital(false);
             SetA1P3Houses(false);
-            StartA1P4();
+            GeneralDiscomfortSurvey.Show(StartA1P4);
         });
     }
 

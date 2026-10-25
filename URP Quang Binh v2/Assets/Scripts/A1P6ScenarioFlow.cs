@@ -25,6 +25,9 @@ public sealed class A1P6ScenarioFlow : MonoBehaviour
     [Min(1)] public int maxDykes = 2;
     [Min(0f)] public float maxTotalDykeLengthMeters = 8f;
 
+    [Header("A1-P6 feedback simulation")]
+    [Min(0f)] public float feedbackSimulationDuration = 10f;
+
     InputAction questA;
     GameObject floodPrefab, prompt, preview, previewHint, waterDirectionHint, activeFlood;
     TerrainFloodSimulation simulation;
@@ -145,11 +148,12 @@ public sealed class A1P6ScenarioFlow : MonoBehaviour
 
     void StartFeedbackScenario()
     {
-        ScenarioFeedbackStage.Show("A1 - P6 | System-Level Consequences", floodPrefab, floodDuration,
+        ScenarioFeedbackStage.Show("A1 - P6 | System-Level Consequences", floodPrefab, feedbackSimulationDuration,
             new[] { "A1P6_Solution_A", "A1P6_Solution_B" }, () =>
         {
             SetP6ScenarioObjects(false);
             SetP6Buildings(false);
+            GeneralDiscomfortSurvey.Show(ParticipationEndUI.Show);
         });
     }
 
@@ -367,8 +371,8 @@ static class A1P6Panel
             30, FontStyles.Bold, -205, 145, TextAlignmentOptions.TopLeft, 70).color = new Color(.4f, 1f, .55f);
         FloodLearningUI.Text("ExplanationTitle", root.transform, "Explanation", 34, FontStyles.Bold, -415, 55, TextAlignmentOptions.Left, 70);
         FloodLearningUI.Text("Explanation", root.transform,
-            "Flood protection can change water storage and flow pathways. A barrier may protect one location but redirect or accumulate water in other areas. Therefore, the consequences for the whole system must be considered; not only the protected area.",
-            29, FontStyles.Normal, -445, 235, TextAlignmentOptions.TopLeft, 70);
+            "Flood protection can change water storage and flow pathways. A barrier may protect one location but redirect or accumulate water in other areas.\n\nTherefore, the consequences for the whole system must be considered; not only the protected area.",
+            29, FontStyles.Normal, -445, 280, TextAlignmentOptions.TopLeft, 70);
         FloodLearningUI.Button("Finish", root.transform, "Finish", -780, 82, 29,
             () => { UnityEngine.Object.Destroy(root); onCompleted?.Invoke(); }, 360);
         Debug.Log($"A1-P6 result: answer={(char)('A' + answer)}, correct={answer == 2}, confidence={confidence}");

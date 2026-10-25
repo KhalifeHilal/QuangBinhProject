@@ -519,3 +519,88 @@ sealed class ScenarioFeedbackStageController : MonoBehaviour
 
     void OnDestroy() => Stop();
 }
+
+static class GeneralDiscomfortSurvey
+{
+    static GameObject panel;
+
+    public static void Show(Action onCompleted)
+    {
+        Close();
+        panel = P2Panel.CanvasRoot("General_Discomfort_Survey", new Vector2(1350, 760));
+        FloodLearningUI.Text("Title", panel.transform, "General Discomfort", 43,
+            FontStyles.Bold, -40, 65, TextAlignmentOptions.Center, 45);
+        FloodLearningUI.Text("Question", panel.transform, "General Discomfort. How do you feel?", 35,
+            FontStyles.Bold, -135, 65, TextAlignmentOptions.Center, 55);
+
+        TMP_Text value = FloodLearningUI.Text("Value", panel.transform,
+            "0 - No Sickness at All", 34, FontStyles.Bold, -245, 65,
+            TextAlignmentOptions.Center, 80);
+        Slider slider = FloodLearningUI.Slider("SicknessSlider", panel.transform, -365);
+        slider.minValue = 0f;
+        slider.maxValue = 20f;
+        slider.wholeNumbers = true;
+        slider.value = 0f;
+        slider.onValueChanged.AddListener(v =>
+        {
+            int score = Mathf.Clamp(Mathf.RoundToInt(v), 0, 20);
+            value.text = score == 0
+                ? "0 - No Sickness at All"
+                : score == 20
+                    ? "20 - Frank Sickness"
+                    : $"{score} / 20";
+        });
+
+        FloodLearningUI.Text("ScaleMin", panel.transform, "0 - No Sickness at All", 23,
+            FontStyles.Normal, -465, 50, TextAlignmentOptions.Left, 95);
+        FloodLearningUI.Text("ScaleMax", panel.transform, "20 - Frank Sickness", 23,
+            FontStyles.Normal, -465, 50, TextAlignmentOptions.Right, 95);
+        FloodLearningUI.Button("Confirm", panel.transform, "Confirm", -580, 82, 29,
+            () =>
+            {
+                int score = Mathf.RoundToInt(slider.value);
+                Debug.Log($"General discomfort score: {score}/20");
+                Close();
+                onCompleted?.Invoke();
+            }, 360);
+        FloodLearningUI.PlaceInFrontOfPlayer(panel.transform, 2.25f);
+    }
+
+    static void Close()
+    {
+        if (panel != null) UnityEngine.Object.Destroy(panel);
+        panel = null;
+    }
+}
+
+static class ParticipationEndUI
+{
+    public static void Show()
+    {
+        GameObject root = P2Panel.CanvasRoot("Participation_Complete", new Vector2(1200, 430));
+        FloodLearningUI.Text("Title", root.transform, "Thanks for your participation", 44,
+            FontStyles.Bold, -70, 75, TextAlignmentOptions.Center, 45);
+        FloodLearningUI.Text("Message", root.transform, "The application will close in 10 seconds.", 31,
+            FontStyles.Normal, -195, 60, TextAlignmentOptions.Center, 55);
+        root.AddComponent<ApplicationQuitAfterDelay>();
+        FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.2f);
+    }
+}
+
+sealed class ApplicationQuitAfterDelay : MonoBehaviour
+{
+    const float DelaySeconds = 10f;
+    float remaining = DelaySeconds;
+
+    void Update()
+    {
+        remaining -= Time.unscaledDeltaTime;
+        if (remaining > 0f) return;
+        enabled = false;
+#if UNITY_EDITOR
+        UnityEditor.EditorApplication.isPlaying = false;
+#else
+        Application.Quit();
+#endif
+    }
+}
