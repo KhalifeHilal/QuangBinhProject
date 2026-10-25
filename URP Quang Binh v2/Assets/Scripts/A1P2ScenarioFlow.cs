@@ -30,6 +30,7 @@ public sealed class A1P2ScenarioFlow : MonoBehaviour
 
     void Awake()
     {
+        ScenarioFeedbackStage.HideAllSolutions();
         SetA1P2Houses(false);
     }
 
@@ -112,7 +113,8 @@ public sealed class A1P2ScenarioFlow : MonoBehaviour
 
     void StartFeedbackScenario()
     {
-        ScenarioFeedbackStage.Show("A1 - P2 | Topography", () =>
+        ScenarioFeedbackStage.Show("A1 - P2 | Topography", floodPrefab, floodDuration,
+            new[] { "A1P2_Solution" }, () =>
         {
             SetA1P2Houses(false);
             StartA1P3();
@@ -290,35 +292,60 @@ static class P2Panel
 static class ScenarioFeedbackStage
 {
     static GameObject panel;
+    static string[] activeSolutionNames;
+    static readonly string[] allSolutionNames =
+    {
+        "A1P2_Solution", "A1P3_Solution", "A1P4_Solution", "A1P5_Solution",
+        "A1P6_Solution_A", "A1P6_Solution_B"
+    };
 
-    public static void Show(string scenarioTitle, Action onCompleted)
+    public static void HideAllSolutions() => SetSolutionObjectsActive(allSolutionNames, false);
+
+    public static void Show(string scenarioTitle, GameObject floodPrefab, float simulationDuration,
+        string[] solutionNames, Action onCompleted)
     {
         Close();
         MakeParticipantDykesTransparent();
+        activeSolutionNames = solutionNames ?? System.Array.Empty<string>();
+        SetSolutionObjectsActive(activeSolutionNames, true);
 
         string safeName = scenarioTitle.Replace("|", "_").Replace(" ", "_");
         panel = P2Panel.CanvasRoot("FeedbackScenario_" + safeName, new Vector2(1300, 520));
+        ScenarioFeedbackStageController controller = panel.AddComponent<ScenarioFeedbackStageController>();
+        controller.Begin(floodPrefab, simulationDuration);
         FloodLearningUI.Text("Title", panel.transform, scenarioTitle + "  |  Feedback scenario", 40,
             FontStyles.Bold, -35, 60, TextAlignmentOptions.Center, 45);
         FloodLearningUI.Text("ParticipantBarriers", panel.transform,
             "Your barriers are shown transparently on the terrain.", 32,
             FontStyles.Normal, -135, 60, TextAlignmentOptions.Center, 55);
         FloodLearningUI.Text("ModelSolution", panel.transform,
-            "Model solution: to be added.", 30,
+            "The model solution is shown together with your barriers.", 30,
             FontStyles.Normal, -225, 60, TextAlignmentOptions.Center, 55);
-        FloodLearningUI.Button("Continue", panel.transform, "Continue", -375, 82, 29,
+        FloodLearningUI.Text("SimulationPrompt", panel.transform,
+            "Press A to start the feedback simulation.", 30,
+            FontStyles.Normal, -300, 55, TextAlignmentOptions.Center, 55).color = new Color(.35f, .82f, 1f);
+        UnityEngine.UI.Button continueButton = FloodLearningUI.Button("Continue", panel.transform, "Continue", -375, 82, 29,
             () =>
             {
                 Close();
                 ClearParticipantDykes();
                 onCompleted?.Invoke();
             }, 360);
+        continueButton.interactable = controller.SimulationFinished;
+        controller.SimulationFinishedChanged += () => continueButton.interactable = true;
         FloodLearningUI.PlaceInFrontOfPlayer(panel.transform, 2.2f);
     }
 
     public static void Close()
     {
-        if (panel != null) UnityEngine.Object.Destroy(panel);
+        if (panel != null)
+        {
+            ScenarioFeedbackStageController controller = panel.GetComponent<ScenarioFeedbackStageController>();
+            if (controller != null) controller.Stop();
+            UnityEngine.Object.Destroy(panel);
+        }
+        SetSolutionObjectsActive(activeSolutionNames, false);
+        activeSolutionNames = null;
         panel = null;
     }
 
@@ -337,6 +364,9 @@ static class ScenarioFeedbackStage
                 MakeMaterialTransparent(material, .38f);
             renderer.materials = materials;
         }
+
+        foreach (Collider collider in manager.GetComponentsInChildren<Collider>(true))
+            if (collider != null) UnityEngine.Object.Destroy(collider);
     }
 
     static void MakeMaterialTransparent(Material material, float alpha)
@@ -368,4 +398,124 @@ static class ScenarioFeedbackStage
         for (int i = manager.transform.childCount - 1; i >= 0; i--)
             UnityEngine.Object.Destroy(manager.transform.GetChild(i).gameObject);
     }
+
+    static void SetSolutionObjectsActive(string[] names, bool active)
+    {
+        if (names == null || names.Length == 0) return;
+        foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+        foreach (Transform child in root.GetComponentsInChildren<Transform>(true))
+        {
+            for (int i = 0; i < names.Length; i++)
+            {
+                if (!string.Equals(child.name, names[i], System.StringComparison.OrdinalIgnoreCase)) continue;
+                child.gameObject.SetActive(active);
+                break;
+            }
+        }
+    }
+}
+
+sealed class ScenarioFeedbackStageController : MonoBehaviour
+{
+    GameObject activeFlood;
+    GameObject floodPrefab;
+    TerrainFloodSimulation simulation;
+    InputAction questA;
+    float simulationDuration;
+    float elapsed;
+    bool waitingForStart;
+    public bool SimulationFinished { get; private set; }
+    public event Action SimulationFinishedChanged;
+
+    public void Begin(GameObject floodPrefab, float duration)
+    {
+        this.floodPrefab = floodPrefab;
+        simulationDuration = Mathf.Max(0f, duration);
+        elapsed = 0f;
+        waitingForStart = true;
+        SimulationFinished = false;
+        questA = new InputAction("Start feedback flood", InputActionType.Button,
+            "<XRController>{RightHand}/primaryButton");
+        questA.Enable();
+        if (floodPrefab == null)
+        {
+            Debug.LogWarning("Feedback scenario has no flood prefab assigned.", this);
+            waitingForStart = false;
+            SimulationFinished = true;
+            return;
+        }
+    }
+
+    void StartSimulation()
+    {
+        if (floodPrefab == null) return;
+        Transform parent = Find("FakeFloodEnvironment")?.transform;
+        activeFlood = Instantiate(floodPrefab, parent, false);
+        activeFlood.name = "FeedbackScenario_FloodSimulation";
+        simulation = activeFlood.GetComponent<TerrainFloodSimulation>();
+        if (simulation == null)
+        {
+            Debug.LogError("TerrainFloodSimulation is missing on the feedback flood prefab.", this);
+            Destroy(activeFlood);
+            activeFlood = null;
+            SimulationFinished = true;
+            SimulationFinishedChanged?.Invoke();
+            return;
+        }
+        simulation.Begin();
+    }
+
+    void Update()
+    {
+        if (SimulationFinished) return;
+        if (waitingForStart)
+        {
+            if (questA != null && questA.WasPressedThisFrame())
+            {
+                waitingForStart = false;
+                StartSimulation();
+            }
+            return;
+        }
+        if (simulation == null || simulationDuration <= 0f)
+        {
+            if (simulationDuration <= 0f) StopSimulationAtDuration();
+            return;
+        }
+        elapsed += Time.deltaTime;
+        if (elapsed >= simulationDuration)
+            StopSimulationAtDuration();
+    }
+
+    void StopSimulationAtDuration()
+    {
+        simulation?.StopSimulation();
+        if (activeFlood != null) Destroy(activeFlood);
+        activeFlood = null;
+        simulation = null;
+        SimulationFinished = true;
+        SimulationFinishedChanged?.Invoke();
+    }
+
+    public void Stop()
+    {
+        waitingForStart = false;
+        simulation?.StopSimulation();
+        if (activeFlood != null) Destroy(activeFlood);
+        activeFlood = null;
+        simulation = null;
+        questA?.Disable();
+        questA?.Dispose();
+        questA = null;
+    }
+
+    static GameObject Find(string objectName)
+    {
+        foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+        foreach (Transform child in root.GetComponentsInChildren<Transform>(true))
+            if (child.name == objectName) return child.gameObject;
+        return null;
+    }
+
+    void OnDestroy() => Stop();
 }

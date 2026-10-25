@@ -34,6 +34,7 @@ public sealed class A1P4ScenarioFlow : MonoBehaviour
 
     void Awake()
     {
+        ScenarioFeedbackStage.HideAllSolutions();
         SetA1P4Houses(false);
         SetHospital(false);
     }
@@ -132,7 +133,8 @@ public sealed class A1P4ScenarioFlow : MonoBehaviour
 
     void StartFeedbackScenario()
     {
-        ScenarioFeedbackStage.Show("A1 - P4 | Water Redistribution", () =>
+        ScenarioFeedbackStage.Show("A1 - P4 | Water Redistribution", floodPrefab, floodDuration,
+            new[] { "A1P4_Solution" }, () =>
         {
             SetA1P4Houses(false);
             SetHospital(false);

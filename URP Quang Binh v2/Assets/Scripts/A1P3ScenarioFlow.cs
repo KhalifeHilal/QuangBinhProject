@@ -29,6 +29,7 @@ public sealed class A1P3ScenarioFlow : MonoBehaviour
 
     void Awake()
     {
+        ScenarioFeedbackStage.HideAllSolutions();
         SetHospital(false);
         SetA1P3Houses(false);
     }
@@ -118,7 +119,8 @@ public sealed class A1P3ScenarioFlow : MonoBehaviour
 
     void StartFeedbackScenario()
     {
-        ScenarioFeedbackStage.Show("A1 - P3 | Barrier Continuity", () =>
+        ScenarioFeedbackStage.Show("A1 - P3 | Barrier Continuity", floodPrefab, floodDuration,
+            new[] { "A1P3_Solution" }, () =>
         {
             SetHospital(false);
             SetA1P3Houses(false);

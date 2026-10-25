@@ -35,6 +35,7 @@ public sealed class A1P5ScenarioFlow : MonoBehaviour
 
     void Awake()
     {
+        ScenarioFeedbackStage.HideAllSolutions();
         SetP5ScenarioObjects(false);
         SetP5Houses(false);
     }
@@ -139,7 +140,8 @@ public sealed class A1P5ScenarioFlow : MonoBehaviour
 
     void StartFeedbackScenario()
     {
-        ScenarioFeedbackStage.Show("A1 - P5 | Resource-Efficient Placement", () =>
+        ScenarioFeedbackStage.Show("A1 - P5 | Resource-Efficient Placement", floodPrefab, floodDuration,
+            new[] { "A1P5_Solution" }, () =>
         {
             SetP5ScenarioObjects(false);
             SetP5Houses(false);

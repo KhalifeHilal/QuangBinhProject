@@ -34,6 +34,7 @@ public sealed class A1P6ScenarioFlow : MonoBehaviour
 
     void Awake()
     {
+        ScenarioFeedbackStage.HideAllSolutions();
         SetP6ScenarioObjects(false);
         SetP6Buildings(false);
     }
@@ -144,7 +145,8 @@ public sealed class A1P6ScenarioFlow : MonoBehaviour
 
     void StartFeedbackScenario()
     {
-        ScenarioFeedbackStage.Show("A1 - P6 | System-Level Consequences", () =>
+        ScenarioFeedbackStage.Show("A1 - P6 | System-Level Consequences", floodPrefab, floodDuration,
+            new[] { "A1P6_Solution_A", "A1P6_Solution_B" }, () =>
         {
             SetP6ScenarioObjects(false);
             SetP6Buildings(false);
