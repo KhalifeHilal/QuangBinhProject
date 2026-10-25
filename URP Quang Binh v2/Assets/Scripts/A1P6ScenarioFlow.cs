@@ -269,102 +269,14 @@ public sealed class A1P6ScenarioFlow : MonoBehaviour
     }
 }
 
-/// <summary>Procedural comparison of two strategies and their system-level effects.</summary>
-public sealed class FloodSystemLevelScenarioA1P6 : MonoBehaviour
-{
-    Material pathMaterial;
-    Material barrierMaterial;
-
-    void Awake()
-    {
-        Renderer terrain = FindRenderer("SM_Tutorial_Terrain_01");
-        if (terrain == null)
-        {
-            Debug.LogWarning("A1-P6 could not find SM_Tutorial_Terrain_01.", this);
-            return;
-        }
-        Bounds b = terrain.bounds;
-        float y = b.max.y + .055f;
-        Shader shader = Shader.Find("Universal Render Pipeline/Unlit");
-        if (shader == null) shader = Shader.Find("Sprites/Default");
-        pathMaterial = new Material(shader) { color = new Color(.02f, .58f, 1f, .95f) };
-        barrierMaterial = new Material(shader) { color = new Color(.95f, .48f, .08f, 1f) };
-
-        Vector3 targetA = Point(b, .23f, .66f, y + .01f);
-        Vector3 otherA = Point(b, .79f, .25f, y + .01f);
-        CreateLine("Strategy_A_TargetProtection", new[] { Point(b, .05f, .66f, y), targetA }, pathMaterial, .12f);
-        CreateLine("Strategy_A_RedirectedFlood", new[] { Point(b, .45f, .48f, y + .015f), otherA, Point(b, .95f, .18f, y + .015f) }, pathMaterial, .105f);
-        CreateLine("Strategy_A_Barrier", Point(b, .41f, .34f, y), Point(b, .41f, .78f, y), barrierMaterial, .075f);
-        CreateLabel("STRATEGY A\n95% target district protected\nHIGH additional exposure elsewhere", Point(b, .26f, .80f, y + .30f), 640);
-        CreateLabel("POPULATED DISTRICT\nadditional flooding", Point(b, .76f, .16f, y + .30f), 500);
-
-        Vector3 targetB = Point(b, .25f, .40f, y + .01f);
-        Vector3 openArea = Point(b, .79f, .78f, y + .01f);
-        CreateLine("Strategy_B_TargetProtection", new[] { Point(b, .05f, .40f, y), targetB }, pathMaterial, .105f);
-        CreateLine("Strategy_B_RedirectedFlood", new[] { Point(b, .45f, .43f, y + .015f), openArea, Point(b, .95f, .86f, y + .015f) }, pathMaterial, .075f);
-        CreateLine("Strategy_B_Barrier", Point(b, .41f, .20f, y), Point(b, .41f, .61f, y), barrierMaterial, .075f);
-        CreateLabel("STRATEGY B\n88% target district protected\nLOW additional exposure elsewhere", Point(b, .26f, .25f, y + .30f), 640);
-        CreateLabel("UNINHABITED OPEN AREA\nredirected water", Point(b, .76f, .89f, y + .30f), 520);
-    }
-
-    Vector3 Point(Bounds b, float x01, float z01, float y)
-    {
-        return new Vector3(Mathf.Lerp(b.min.x, b.max.x, x01), y,
-            Mathf.Lerp(b.min.z, b.max.z, z01));
-    }
-
-    void CreateLine(string name, Vector3[] points, Material material, float width)
-    {
-        GameObject obj = new GameObject(name, typeof(LineRenderer));
-        obj.transform.SetParent(transform, true);
-        LineRenderer line = obj.GetComponent<LineRenderer>();
-        line.useWorldSpace = true;
-        line.positionCount = points.Length;
-        line.SetPositions(points);
-        line.widthMultiplier = width;
-        line.numCornerVertices = 6;
-        line.numCapVertices = 6;
-        line.material = material;
-    }
-
-    void CreateLine(string name, Vector3 start, Vector3 end, Material material, float width)
-    {
-        CreateLine(name, new[] { start, end }, material, width);
-    }
-
-    void CreateLabel(string value, Vector3 position, float width)
-    {
-        GameObject canvas = P2Panel.CanvasRoot(value.Substring(0, 1) + "_System_Label", new Vector2(width, 120), .0011f);
-        canvas.transform.SetParent(transform, true);
-        canvas.transform.position = position;
-        if (Camera.main != null)
-            canvas.transform.rotation = Quaternion.LookRotation(canvas.transform.position - Camera.main.transform.position, Vector3.up);
-        FloodLearningUI.Text("Text", canvas.transform, value, 29, FontStyles.Bold, -8, 108, TextAlignmentOptions.Center, 8);
-    }
-
-    static Renderer FindRenderer(string name)
-    {
-        foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
-        foreach (Transform child in root.GetComponentsInChildren<Transform>(true))
-            if (child.name == name) return child.GetComponentInChildren<Renderer>(true);
-        return null;
-    }
-
-    void OnDestroy()
-    {
-        if (pathMaterial != null) Destroy(pathMaterial);
-        if (barrierMaterial != null) Destroy(barrierMaterial);
-    }
-}
-
 static class A1P6Panel
 {
     static readonly string[] Answers =
     {
-        "A) Strategy A, because it directly protects more buildings.",
-        "B) Both strategies, because each uses the maximum of two barriers.",
-        "C) Strategy A, because flooding outside the primary protection area is irrelevant.",
-        "D) Strategy B, because it prioritizes critical buildings and avoids transferring substantial flood risk to another important location."
+        "A) Protecting one area removes the need to examine the rest of the system.",
+        "B) Higher upstream water always means that the barrier has failed.",
+        "C) A barrier can reduce flooding locally while increasing flood risk elsewhere.",
+        "D) Flood barriers only affect the exact area where they are built."
     };
 
     public static GameObject CreateStartPrompt()
@@ -381,33 +293,26 @@ static class A1P6Panel
     {
         GameObject root = P2Panel.CanvasRoot("A1_P6_Build", new Vector2(1100, 390));
         FloodLearningUI.Text("Title", root.transform, "A1 - P6  |  Build protection", 39, FontStyles.Bold, -35, 58, TextAlignmentOptions.Center, 45);
-        FloodLearningUI.Text("Prompt", root.transform, "Build up to two dykes for your strategy anywhere on the terrain with the trigger.\nPoint at one and press Grip to destroy it. Press A when you are finished.", 30, FontStyles.Bold, -135, 135, TextAlignmentOptions.Center, 55).color = new Color(.35f, .82f, 1f);
+        FloodLearningUI.Text("Prompt", root.transform, "Build up to two dykes anywhere on the terrain with the trigger.\nPoint at one and press Grip to destroy it. Press A when you are finished.", 30, FontStyles.Bold, -135, 135, TextAlignmentOptions.Center, 55).color = new Color(.35f, .82f, 1f);
         FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.1f);
         return root;
     }
 
     public static void ShowQuestion(Action repeat, Action<int> answer)
     {
-        GameObject root = P2Panel.CanvasRoot("Quiz_A1_P6", new Vector2(1700, 1600));
+        GameObject root = P2Panel.CanvasRoot("Quiz_A1_P6", new Vector2(1600, 1180));
         FloodLearningUI.Text("Title", root.transform, "A1 - P6  |  System-Level Consequences", 44, FontStyles.Bold, -28, 62, TextAlignmentOptions.Left, 55);
         FloodLearningUI.Text("Scenario", root.transform,
-            "A river flows from left to right through a landscape with four buildings.\n\n" +
-            "- One low-priority building is in the lower-left area.\n" +
-            "- One very high-priority building is in the lower-middle area.\n" +
-            "- One high-priority building is in the lower-right area.\n" +
-            "- One high-priority building is in the upper-right area.\n\n" +
-            "The participant can build a maximum of two flood barriers.\n\n" +
-            "Strategy A protects all three buildings in the lower area. However, the second barrier backs up water, resulting in flooding of the high-priority building in the upper-right area.\n\n" +
-            "Strategy B prioritizes the very high-priority building in the lower-middle area and the high-priority building in the lower-right area. The low-priority building remains exposed to flooding, but the high-priority building in the upper-right area stays dry, and additional water is directed toward an uninhabited open area.",
-            24, FontStyles.Normal, -105, 560, TextAlignmentOptions.TopLeft, 55);
-        FloodLearningUI.Text("Question", root.transform, "Which strategy best considers the overall consequences of flood protection?", 34, FontStyles.Bold, -685, 75, TextAlignmentOptions.TopLeft, 55);
+            "You may build a maximum of two flood barriers. A barrier reduces flooding in one area, but water depth increases upstream and more water begins to flow toward another populated area.",
+            28, FontStyles.Normal, -105, 170, TextAlignmentOptions.TopLeft, 55);
+        FloodLearningUI.Text("Question", root.transform, "What does this show about flood protection?", 34, FontStyles.Bold, -305, 65, TextAlignmentOptions.TopLeft, 55);
         for (int i = 0; i < Answers.Length; i++)
         {
             int n = i;
-            FloodLearningUI.Button("Answer_" + (char)('A' + i), root.transform, Answers[i], -790 - i * 135, 112, 24,
+            FloodLearningUI.Button("Answer_" + (char)('A' + i), root.transform, Answers[i], -385 - i * 135, 112, 24,
                 () => { UnityEngine.Object.Destroy(root); answer(n); }, 1500);
         }
-        FloodLearningUI.Button("Repeat", root.transform, "Repeat scenario", -1370, 82, 29,
+        FloodLearningUI.Button("Repeat", root.transform, "Repeat scenario", -965, 82, 29,
             () => { UnityEngine.Object.Destroy(root); repeat(); }, 390);
         FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.25f);
     }
@@ -436,21 +341,18 @@ static class A1P6Panel
     {
         foreach (Transform child in root.transform) UnityEngine.Object.Destroy(child.gameObject);
         TMP_Text result = FloodLearningUI.Text("Result", root.transform,
-            answer == 3 ? $"Correct!  |  Confidence: {confidence}%" : $"Your answer: {(char)('A' + answer)}  |  Confidence: {confidence}%",
+            answer == 2 ? $"Correct!  |  Confidence: {confidence}%" : $"Your answer: {(char)('A' + answer)}  |  Confidence: {confidence}%",
             39, FontStyles.Bold, -105, 62, TextAlignmentOptions.Center, 65);
-        result.color = answer == 3 ? new Color(.4f, 1f, .55f) : new Color(1f, .68f, .35f);
+        result.color = answer == 2 ? new Color(.4f, 1f, .55f) : new Color(1f, .68f, .35f);
         FloodLearningUI.Text("Correct", root.transform,
-            "Correct answer: D) Strategy B, because it prioritizes critical buildings and avoids transferring substantial flood risk to another important location.",
-            30, FontStyles.Bold, -205, 175, TextAlignmentOptions.TopLeft, 70).color = new Color(.4f, 1f, .55f);
+            "Correct answer: C) A barrier can reduce flooding locally while increasing flood risk elsewhere.",
+            30, FontStyles.Bold, -205, 145, TextAlignmentOptions.TopLeft, 70).color = new Color(.4f, 1f, .55f);
         FloodLearningUI.Text("ExplanationTitle", root.transform, "Explanation", 34, FontStyles.Bold, -415, 55, TextAlignmentOptions.Left, 70);
         FloodLearningUI.Text("Explanation", root.transform,
-            "Flood protection should consider both building importance and the consequences of redirected water.\n\n" +
-            "Strategy A directly protects three buildings but causes flooding at another high-priority building.\n\n" +
-            "Strategy B directly protects only two buildings, but it prioritizes the most critical locations, avoids additional flooding at the important upper-right building, and directs excess water toward an uninhabited area.\n\n" +
-            "Therefore, Strategy B provides the better overall protection outcome.",
-            29, FontStyles.Normal, -485, 360, TextAlignmentOptions.TopLeft, 70);
-        FloodLearningUI.Button("Finish", root.transform, "Finish", -950, 82, 29,
+            "Flood protection can change water storage and flow pathways. A barrier may protect one location but redirect or accumulate water in other areas. Therefore, the consequences for the whole system must be considered; not only the protected area.",
+            29, FontStyles.Normal, -445, 235, TextAlignmentOptions.TopLeft, 70);
+        FloodLearningUI.Button("Finish", root.transform, "Finish", -780, 82, 29,
             () => UnityEngine.Object.Destroy(root), 360);
-        Debug.Log($"A1-P6 result: answer={(char)('A' + answer)}, correct={answer == 3}, confidence={confidence}");
+        Debug.Log($"A1-P6 result: answer={(char)('A' + answer)}, correct={answer == 2}, confidence={confidence}");
     }
 }
