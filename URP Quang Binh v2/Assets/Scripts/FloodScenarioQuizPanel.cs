@@ -144,6 +144,7 @@ public sealed class FloodScenarioQuizPanel : MonoBehaviour
     void ConfirmConfidence()
     {
         int confidence = Mathf.RoundToInt(confidenceSlider.value) * 20;
+        FloodStudyLogger.RecordConfidence(confidence);
         confidenceGroup.SetActive(false);
         feedbackGroup.SetActive(true);
         TMP_Text result = feedbackGroup.transform.Find("Result").GetComponent<TMP_Text>();

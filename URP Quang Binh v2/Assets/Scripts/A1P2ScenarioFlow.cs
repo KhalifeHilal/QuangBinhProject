@@ -271,7 +271,13 @@ static class P2Panel
         string[] labels = { "Not confident", "Low confidence", "Slightly confident", "Moderately confident", "Confident", "Very confident" };
         slider.onValueChanged.AddListener(v => { int n = Mathf.Clamp(Mathf.RoundToInt(v), 0, 5); value.text = $"{n * 20}% - {labels[n]}"; });
         FloodLearningUI.Text("Scale", confidence.transform, "Not confident                                      Moderately confident                                      Very confident", 23, FontStyles.Normal, -510, 55, TextAlignmentOptions.Center, 130).color = new Color(.75f, .85f, .95f);
-        FloodLearningUI.Button("Confirm", confidence.transform, "Confirm confidence", -650, 95, 31, () => ShowFeedback(root, answer, Mathf.RoundToInt(slider.value) * 20, onCompleted), 420);
+        FloodLearningUI.Button("Confirm", confidence.transform, "Confirm confidence", -650, 95, 31,
+            () =>
+            {
+                int confidenceValue = Mathf.RoundToInt(slider.value) * 20;
+                FloodStudyLogger.RecordConfidence(confidenceValue);
+                ShowFeedback(root, answer, confidenceValue, onCompleted);
+            }, 420);
         FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.25f);
     }
     static void ShowFeedback(GameObject root, int answer, int confidence, Action onCompleted)

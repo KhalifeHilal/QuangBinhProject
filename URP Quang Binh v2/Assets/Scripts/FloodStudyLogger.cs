@@ -117,6 +117,15 @@ public static class FloodStudyLogger
         current.answer_was_correct = correctIndex >= 0 && answerIndex == correctIndex;
     }
 
+    public static void RecordConfidence(int confidencePercent)
+    {
+        if (current == null) return;
+        int value = Mathf.Clamp(confidencePercent, 0, 100);
+        current.confidence = value;
+        current.confidence_value = value;
+        current.confidence_recorded = true;
+    }
+
     /// <summary>
     /// Records a 0-20 General Discomfort response. These surveys are shown
     /// between scenarios, so the value is written to its own JSON file
@@ -368,16 +377,89 @@ public static class FloodStudyLogger
 
             if (TryGetBounds(child, out Bounds bounds))
             {
+                Vector3 startWorld;
+                Vector3 endWorld;
+                if (!TryGetSolutionEndpoints(child, out startWorld, out endWorld))
+                {
+                    // Keep the record usable even for a solution object without
+                    // a readable MeshFilter; the bounds center is an explicit
+                    // fallback rather than silently omitting the solution.
+                    startWorld = bounds.center;
+                    endWorld = bounds.center;
+                }
                 result.Add(new FloodSolutionGeometry
                 {
                     object_name = child.name,
                     position_local = ToMapLocal(child.position),
                     bounds_center_local = ToMapLocal(bounds.center),
-                    bounds_size_world = bounds.size
+                    bounds_size_world = bounds.size,
+                    start_position_local = ToMapLocal(startWorld),
+                    end_position_local = ToMapLocal(endWorld),
+                    length_dyke_m = Vector3.Distance(startWorld, endWorld)
                 });
             }
         }
         return result;
+    }
+
+    static bool TryGetSolutionEndpoints(Transform target, out Vector3 startWorld, out Vector3 endWorld)
+    {
+        startWorld = Vector3.zero;
+        endWorld = Vector3.zero;
+        MeshFilter[] filters = target.GetComponentsInChildren<MeshFilter>(true);
+        List<Vector3> vertices = new List<Vector3>();
+        for (int i = 0; i < filters.Length; i++)
+        {
+            Mesh mesh = filters[i] != null ? filters[i].sharedMesh : null;
+            if (mesh == null || !mesh.isReadable || mesh.vertexCount == 0) continue;
+            Vector3[] source;
+            try { source = mesh.vertices; }
+            catch (Exception) { continue; }
+            for (int v = 0; v < source.Length; v++)
+                vertices.Add(filters[i].transform.TransformPoint(source[v]));
+        }
+        if (vertices.Count < 2) return false;
+
+        Vector3 axisA = target.right;
+        Vector3 axisB = target.forward;
+        axisA.y = 0f;
+        axisB.y = 0f;
+        if (axisA.sqrMagnitude < .000001f && axisB.sqrMagnitude < .000001f) return false;
+        if (axisA.sqrMagnitude < .000001f) axisA = Vector3.right;
+        if (axisB.sqrMagnitude < .000001f) axisB = Vector3.forward;
+        axisA.Normalize();
+        axisB.Normalize();
+
+        float spreadA = AxisSpread(vertices, axisA);
+        float spreadB = AxisSpread(vertices, axisB);
+        Vector3 axis = spreadA >= spreadB ? axisA : axisB;
+        float min = float.PositiveInfinity;
+        float max = float.NegativeInfinity;
+        Vector3 perpendicularSum = Vector3.zero;
+        for (int i = 0; i < vertices.Count; i++)
+        {
+            float projection = Vector3.Dot(vertices[i], axis);
+            min = Mathf.Min(min, projection);
+            max = Mathf.Max(max, projection);
+            perpendicularSum += vertices[i] - axis * projection;
+        }
+        Vector3 perpendicularCenter = perpendicularSum / vertices.Count;
+        startWorld = perpendicularCenter + axis * min;
+        endWorld = perpendicularCenter + axis * max;
+        return (endWorld - startWorld).sqrMagnitude > .000001f;
+    }
+
+    static float AxisSpread(List<Vector3> points, Vector3 axis)
+    {
+        float min = float.PositiveInfinity;
+        float max = float.NegativeInfinity;
+        for (int i = 0; i < points.Count; i++)
+        {
+            float projection = Vector3.Dot(points[i], axis);
+            min = Mathf.Min(min, projection);
+            max = Mathf.Max(max, projection);
+        }
+        return max - min;
     }
 
     static List<FloodDykeRecord> CloneDykeRecords(List<FloodDykeRecord> source)
@@ -708,6 +790,9 @@ public sealed class FloodScenarioRecord
     public string answer;
     public string correct_answer;
     public bool answer_was_correct;
+    public int confidence;
+    public int confidence_value;
+    public bool confidence_recorded;
     public string build_end_screenshot_path;
     public string simulation_end_screenshot_path;
     public string feedback_end_screenshot_path;
@@ -756,6 +841,9 @@ public sealed class FloodSolutionGeometry
     public Vector3 position_local;
     public Vector3 bounds_center_local;
     public Vector3 bounds_size_world;
+    public Vector3 start_position_local;
+    public Vector3 end_position_local;
+    public float length_dyke_m;
 }
 
 [Serializable]

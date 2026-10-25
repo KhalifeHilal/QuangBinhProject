@@ -366,7 +366,12 @@ static class A1P6Panel
         });
         FloodLearningUI.Text("Scale", group.transform, "Not confident                                      Moderately confident                                      Very confident", 23, FontStyles.Normal, -510, 55, TextAlignmentOptions.Center, 130).color = new Color(.75f, .85f, .95f);
         FloodLearningUI.Button("Confirm", group.transform, "Confirm confidence", -650, 95, 31,
-            () => ShowFeedback(root, answer, Mathf.RoundToInt(slider.value) * 20, onCompleted), 420);
+            () =>
+            {
+                int confidence = Mathf.RoundToInt(slider.value) * 20;
+                FloodStudyLogger.RecordConfidence(confidence);
+                ShowFeedback(root, answer, confidence, onCompleted);
+            }, 420);
         FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.25f);
     }
 

@@ -25,6 +25,10 @@ public sealed class PlayMakerTerrainFloodScenario03 : MonoBehaviour
     GameObject waterDirectionHint;
     int selectedAnswer = -1;
     Phase phase;
+    // The normal PlayMaker tutorial path reaches A1-P1 from Etat 12 rather
+    // than through BeginAfterTutorial. Keep an explicit guard so the scenario
+    // logger is initialized exactly once on both paths.
+    bool scenarioLogStarted;
 
     enum Phase { WaitingForTutorial, WaitingForA, Preview, Question, WaitingForSimulationA, Running, Confidence }
 
@@ -43,10 +47,10 @@ public sealed class PlayMakerTerrainFloodScenario03 : MonoBehaviour
     /// <summary>Starts A1-P1 directly without waiting for the PlayMaker tutorial.</summary>
     public void BeginDebug(GameObject prefab, float previewSeconds, float simulationSeconds)
     {
-        FloodStudyLogger.BeginScenario("A1-P1", "Floodway Path Identification", previewSeconds);
         floodPrefab = prefab;
         pathwayViewingDuration = previewSeconds;
         duration = simulationSeconds;
+        EnsureScenarioLogStarted();
         Hide("StartGame"); Hide("TutorialAnimation_01"); Hide("TutorialAnimation_02");
         ClearDykeManagerChildren();
         StartPathwayPreview();
@@ -55,10 +59,10 @@ public sealed class PlayMakerTerrainFloodScenario03 : MonoBehaviour
     /// <summary>Arms A1-P1 after the tutorial has completed, without overlapping it.</summary>
     public void BeginAfterTutorial(GameObject prefab, float previewSeconds, float simulationSeconds)
     {
-        FloodStudyLogger.BeginScenario("A1-P1", "Floodway Path Identification", previewSeconds);
         floodPrefab = prefab;
         pathwayViewingDuration = previewSeconds;
         duration = simulationSeconds;
+        EnsureScenarioLogStarted();
         Hide("StartGame"); Hide("TutorialAnimation_01"); Hide("TutorialAnimation_02");
         ClearDykeManagerChildren();
         if (continuePrompt != null) Destroy(continuePrompt);
@@ -70,6 +74,10 @@ public sealed class PlayMakerTerrainFloodScenario03 : MonoBehaviour
     {
         if (phase == Phase.WaitingForTutorial && tutorial != null && tutorial.Fsm.ActiveStateName == "Etat 12")
         {
+            // This is the normal in-scene route into A1-P1. Previously it
+            // showed the prompt without creating a logger record, so all
+            // subsequent answer/confidence/simulation events were discarded.
+            EnsureScenarioLogStarted();
             Hide("StartGame"); Hide("TutorialAnimation_01"); Hide("TutorialAnimation_02");
             ClearDykeManagerChildren();
             continuePrompt = FloodScenarioContinuePrompt.Show();
@@ -133,6 +141,11 @@ public sealed class PlayMakerTerrainFloodScenario03 : MonoBehaviour
         activeScenario = null;
         ClearDykeManagerChildren();
         SetDykeConstruction(false, true);
+        // A1-P1 deliberately has no participant building phase. Still record
+        // a zero-length phase and its top-down image so its log has the same
+        // build_end/simulation_end evidence as the other scenarios.
+        FloodStudyLogger.BeginBuildingPhase();
+        FloodStudyLogger.EndBuildingPhase();
         if (continuePrompt != null) Destroy(continuePrompt);
         continuePrompt = FloodScenarioContinuePrompt.ShowSimulationStart();
         phase = Phase.WaitingForSimulationA;
@@ -182,9 +195,17 @@ public sealed class PlayMakerTerrainFloodScenario03 : MonoBehaviour
     void StartA1P2()
     {
         FloodStudyLogger.EndScenario();
+        scenarioLogStarted = false;
         A1P2ScenarioFlow flow = gameObject.GetComponent<A1P2ScenarioFlow>();
         if (flow == null) flow = gameObject.AddComponent<A1P2ScenarioFlow>();
         flow.Begin(floodPrefab, pathwayViewingDuration, duration);
+    }
+
+    void EnsureScenarioLogStarted()
+    {
+        if (scenarioLogStarted && FloodStudyLogger.IsScenarioActive) return;
+        FloodStudyLogger.BeginScenario("A1-P1", "Floodway Path Identification", pathwayViewingDuration);
+        scenarioLogStarted = true;
     }
 
     static void SetDykeConstruction(bool enabled, bool hideOldDykes)
