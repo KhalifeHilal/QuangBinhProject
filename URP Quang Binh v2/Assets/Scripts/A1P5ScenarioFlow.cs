@@ -193,9 +193,9 @@ public sealed class A1P5ScenarioFlow : MonoBehaviour
         string[] objectNames = { "A1P5_1", "A1P5_2", "A1P5_3" };
         string[] labels =
         {
-            "STRATEGY B\n30 m  |  3 buildings\n0.100 buildings / m",
-            "STRATEGY A\n30 m  |  2 buildings\n0.067 buildings / m",
-            "STRATEGY C\n50 m  |  4 buildings\n0.080 buildings / m"
+            "STRATEGY B\n1.5 m  |  3 buildings\n2 buildings / m",
+            "STRATEGY A\n1.5 m  |  2 buildings\n1.3 buildings / m",
+            "STRATEGY C\n2.5 m  |  4 buildings\n1.6 buildings / m"
         };
 
         for (int i = 0; i < objectNames.Length; i++)
@@ -287,9 +287,9 @@ static class A1P5Panel
 {
     static readonly string[] Answers =
     {
-        "A) Strategy A, with 2 buildings over 30 m.",
-        "B) Strategy B, with 3 buildings over 30 m.",
-        "C) Strategy C, with 4 buildings over 50 m.",
+        "A) Strategy A, with 2 buildings protected by a 1.5 m barrier.",
+        "B) Strategy B, with 3 buildings protected by a 1.5 m barrier.",
+        "C) Strategy C, with 4 buildings protected by a 2.5 m barrier.",
         "D) Strategies A and C provide the same ratio."
     };
 
@@ -316,7 +316,7 @@ static class A1P5Panel
     {
         GameObject root = P2Panel.CanvasRoot("Quiz_A1_P5", new Vector2(1600, 1180));
         FloodLearningUI.Text("Title", root.transform, "A1 - P5  |  Resource-Efficient Placement", 44, FontStyles.Bold, -28, 62, TextAlignmentOptions.Left, 55);
-        FloodLearningUI.Text("Scenario", root.transform, "A residential housing block needs protection. Three strategies produce the following outcomes:\nStrategy A: 30 m barrier, 2 buildings protected\nStrategy B: 30 m barrier, 3 buildings protected\nStrategy C: 50 m barrier, 4 buildings protected", 28, FontStyles.Normal, -105, 165, TextAlignmentOptions.TopLeft, 55);
+        FloodLearningUI.Text("Scenario", root.transform, "A residential housing block needs protection. Three strategies produce the following outcomes:\nStrategy A: 1.5 m barrier, 2 buildings protected\nStrategy B: 1.5 m barrier, 3 buildings protected\nStrategy C: 2.5 m barrier, 4 buildings protected", 28, FontStyles.Normal, -105, 165, TextAlignmentOptions.TopLeft, 55);
         FloodLearningUI.Text("Question", root.transform, "Which strategy protects the most buildings per metre of barrier?", 32, FontStyles.Bold, -285, 95, TextAlignmentOptions.TopLeft, 55);
         for (int i = 0; i < Answers.Length; i++)
         {
@@ -357,11 +357,11 @@ static class A1P5Panel
             39, FontStyles.Bold, -105, 62, TextAlignmentOptions.Center, 65);
         result.color = answer == 1 ? new Color(.4f, 1f, .55f) : new Color(1f, .68f, .35f);
         FloodLearningUI.Text("Correct", root.transform,
-            "Correct answer: B) Strategy B, with 3 buildings over 30 m.",
+            "Correct answer: B) Strategy B, with 3 buildings protected by a 1.5 m barrier.",
             31, FontStyles.Bold, -205, 120, TextAlignmentOptions.TopLeft, 70).color = new Color(.4f, 1f, .55f);
         FloodLearningUI.Text("ExplanationTitle", root.transform, "Explanation", 34, FontStyles.Bold, -370, 55, TextAlignmentOptions.Left, 70);
         FloodLearningUI.Text("Explanation", root.transform,
-            "Strategy A: 2 / 30 = 0.067 buildings/m\nStrategy B: 3 / 30 = 0.100 buildings/m\nStrategy C: 4 / 50 = 0.080 buildings/m\n\nStrategy B provides the highest protection per metre of barrier, even though Strategy C protects more buildings in total. This makes Strategy B the most resource-efficient placement strategy.",
+            "Strategy A: 2 / 1.5 = about 1.3 buildings/m\nStrategy B: 3 / 1.5 = 2 buildings/m\nStrategy C: 4 / 2.5 = about 1.6 buildings/m\n\nStrategy B provides the highest protection per metre of barrier, even though Strategy C protects more buildings in total. This makes Strategy B the most resource-efficient placement strategy.",
             30, FontStyles.Normal, -435, 230, TextAlignmentOptions.TopLeft, 70);
         FloodLearningUI.Button("Finish", root.transform, "Finish", -735, 82, 29,
             () => { UnityEngine.Object.Destroy(root); onCompleted?.Invoke(); }, 360);
