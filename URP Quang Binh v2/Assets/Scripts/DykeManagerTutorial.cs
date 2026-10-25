@@ -27,6 +27,14 @@ public class DykeManagerTutorial : MonoBehaviour
 
     [Header("Scenario placement")]
     public bool freePlacement;
+    [Tooltip("Maximum number of free-placement dykes. Zero means unlimited.")]
+    [Min(0)] public int maxFreePlacementDykes;
+    [Tooltip("Minimum length of one free-placement dyke in metres. Zero disables the minimum.")]
+    [Min(0f)] public float minFreePlacementDykeLengthMeters;
+    [Tooltip("Maximum length of one free-placement dyke in metres. Zero means unlimited.")]
+    [Min(0f)] public float maxFreePlacementDykeLengthMeters;
+    [Tooltip("Maximum combined length of all free-placement dykes in metres. Zero means unlimited.")]
+    [Min(0f)] public float maxTotalFreePlacementDykeLengthMeters;
 
     [Header("For PlayMaker")]
     public int dykeBuilt = 0;
@@ -90,6 +98,25 @@ public class DykeManagerTutorial : MonoBehaviour
         {
             GenerateFutureDike();
         }
+    }
+
+    /// <summary>Configures the active scenario's free-placement limits.</summary>
+    public void ConfigureFreePlacementLimits(int maxDykes, float minLengthMeters,
+        float maxLengthMeters, float maxTotalLengthMeters)
+    {
+        maxFreePlacementDykes = Mathf.Max(0, maxDykes);
+        minFreePlacementDykeLengthMeters = Mathf.Max(0f, minLengthMeters);
+        maxFreePlacementDykeLengthMeters = Mathf.Max(0f, maxLengthMeters);
+        maxTotalFreePlacementDykeLengthMeters = Mathf.Max(0f, maxTotalLengthMeters);
+    }
+
+    /// <summary>Clears scenario-specific placement limits.</summary>
+    public void ClearFreePlacementLimits()
+    {
+        maxFreePlacementDykes = 0;
+        minFreePlacementDykeLengthMeters = 0f;
+        maxFreePlacementDykeLengthMeters = 0f;
+        maxTotalFreePlacementDykeLengthMeters = 0f;
     }
 
     void UpdateScenarioDykeHover()
@@ -311,17 +338,29 @@ public class DykeManagerTutorial : MonoBehaviour
 
     void DrawNewDyke()
     {
-        GameObject dyke = Instantiate(dykePrefab, transform);
-        dyke.transform.position = (startPoint + endPoint) / 2;
-
         Vector3 fullDirection = endPoint - startPoint;
         Vector3 horizontalDirection = new Vector3(fullDirection.x, 0f, fullDirection.z);
         float horizontalDistance = horizontalDirection.magnitude;
         if (horizontalDistance < 0.0001f)
         {
-            Destroy(dyke);
             return;
         }
+
+        int currentDykeCount = GetComponentsInChildren<A1P1ScenarioDyke>(true).Length;
+        if (freePlacement && maxFreePlacementDykes > 0 && currentDykeCount >= maxFreePlacementDykes)
+            return;
+        if (freePlacement && minFreePlacementDykeLengthMeters > 0f &&
+            horizontalDistance < minFreePlacementDykeLengthMeters)
+            return;
+        if (freePlacement && maxFreePlacementDykeLengthMeters > 0f &&
+            horizontalDistance > maxFreePlacementDykeLengthMeters)
+            return;
+        if (freePlacement && maxTotalFreePlacementDykeLengthMeters > 0f &&
+            CurrentFreePlacementLengthMeters() + horizontalDistance > maxTotalFreePlacementDykeLengthMeters)
+            return;
+
+        GameObject dyke = Instantiate(dykePrefab, transform);
+        dyke.transform.position = (startPoint + endPoint) / 2;
 
         // Follow the terrain slope, but do not count the height difference as
         // additional dyke length. The previous Vector3.Distance() made a dyke
@@ -339,11 +378,21 @@ public class DykeManagerTutorial : MonoBehaviour
         {
             AddMeshColliders(dyke);
             dyke.AddComponent<A1P1ScenarioDyke>();
+            ScenarioDykeLength length = dyke.AddComponent<ScenarioDykeLength>();
+            length.lengthMeters = horizontalDistance;
         }
 
         // AddInteraction(dyke);
 
         dykeBuilt++;
+    }
+
+    float CurrentFreePlacementLengthMeters()
+    {
+        float total = 0f;
+        foreach (ScenarioDykeLength length in GetComponentsInChildren<ScenarioDykeLength>(true))
+            if (length != null) total += length.lengthMeters;
+        return total;
     }
 
     void BuryDykeFeet(GameObject dyke, float targetLowestWorldY)
@@ -444,4 +493,10 @@ public class DykeManagerTutorial : MonoBehaviour
         scenarioGrip?.Disable();
         scenarioGrip?.Dispose();
     }
+}
+
+/// <summary>Stores the measured horizontal length of a scenario dyke.</summary>
+sealed class ScenarioDykeLength : MonoBehaviour
+{
+    public float lengthMeters;
 }

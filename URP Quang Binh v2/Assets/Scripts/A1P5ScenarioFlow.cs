@@ -21,6 +21,11 @@ public sealed class A1P5ScenarioFlow : MonoBehaviour
     [SerializeField] GameObject houseJ;
     [SerializeField] GameObject houseK;
 
+    [Header("A1-P5 dyke limits (metres)")]
+    [Min(1)] public int maxDykes = 1;
+    [Min(0f)] public float minDykeLengthMeters = 0f;
+    [Min(0f)] public float maxDykeLengthMeters = 1.5f;
+
     InputAction questA;
     GameObject floodPrefab, prompt, preview, previewHint, waterDirectionHint, activeFlood;
     TerrainFloodSimulation simulation;
@@ -67,7 +72,7 @@ public sealed class A1P5ScenarioFlow : MonoBehaviour
     void StartPreview()
     {
         Cleanup(ref prompt); Cleanup(ref preview); Cleanup(ref previewHint);
-        SetDykeConstruction(false); ClearDykes();
+        SetDykeConstruction(false, 0, 0f, 0f, 0f); ClearDykes();
         // A1P5_1/2/3 are the authored strategy dykes and labels. Do not add
         // the old procedural corridor preview here.
         SetP5ScenarioObjects(true);
@@ -92,7 +97,7 @@ public sealed class A1P5ScenarioFlow : MonoBehaviour
         // Hide the authored strategy dykes and their labels before the
         // participant builds one of the strategies themselves.
         SetP5ScenarioObjects(false);
-        SetDykeConstruction(true);
+        SetDykeConstruction(true, maxDykes, minDykeLengthMeters, maxDykeLengthMeters, 0f);
         prompt = A1P5Panel.CreateBuildingPrompt();
         waterDirectionHint = ScenarioGuidanceOverlay.ShowWaterFromLeft();
         phase = Phase.BuildingDykes;
@@ -106,7 +111,7 @@ public sealed class A1P5ScenarioFlow : MonoBehaviour
             return;
         }
         Cleanup(ref prompt); Cleanup(ref waterDirectionHint);
-        SetDykeConstruction(false);
+        SetDykeConstruction(false, 0, 0f, 0f, 0f);
         Transform parent = Find("FakeFloodEnvironment")?.transform;
         activeFlood = Instantiate(floodPrefab, parent, false);
         activeFlood.name = "Scenario_A1_P5_WithParticipantDykes";
@@ -139,7 +144,7 @@ public sealed class A1P5ScenarioFlow : MonoBehaviour
         flow.Begin(floodPrefab, viewingDuration, floodDuration);
     }
 
-    static void SetDykeConstruction(bool enabled)
+    static void SetDykeConstruction(bool enabled, int maxDykes, float minLengthMeters, float maxLengthMeters, float maxTotalLengthMeters)
     {
         DykeManagerTutorial manager = UnityEngine.Object.FindFirstObjectByType<DykeManagerTutorial>(FindObjectsInactive.Include);
         if (manager != null)
@@ -147,6 +152,8 @@ public sealed class A1P5ScenarioFlow : MonoBehaviour
             manager.gameObject.SetActive(true);
             manager.freePlacement = enabled;
             manager.enabled = enabled;
+            if (enabled) manager.ConfigureFreePlacementLimits(maxDykes, minLengthMeters, maxLengthMeters, maxTotalLengthMeters);
+            else manager.ClearFreePlacementLimits();
         }
         foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
         foreach (Transform child in root.GetComponentsInChildren<Transform>(true))
@@ -159,6 +166,7 @@ public sealed class A1P5ScenarioFlow : MonoBehaviour
         if (manager == null) return;
         manager.enabled = false;
         manager.freePlacement = false;
+        manager.ClearFreePlacementLimits();
         for (int i = manager.transform.childCount - 1; i >= 0; i--)
             UnityEngine.Object.Destroy(manager.transform.GetChild(i).gameObject);
     }
@@ -299,7 +307,7 @@ static class A1P5Panel
     {
         GameObject root = P2Panel.CanvasRoot("A1_P5_Build", new Vector2(1100, 390));
         FloodLearningUI.Text("Title", root.transform, "A1 - P5  |  Build protection", 39, FontStyles.Bold, -35, 58, TextAlignmentOptions.Center, 45);
-        FloodLearningUI.Text("Prompt", root.transform, "Rebuild one of the strategy dykes to protect the housing block and use the available material efficiently.\nBuild with the trigger. Point at a dyke and press Grip to destroy it. Press A when you are finished.", 30, FontStyles.Bold, -135, 155, TextAlignmentOptions.Center, 55).color = new Color(.35f, .82f, 1f);
+        FloodLearningUI.Text("Prompt", root.transform, "Build one dyke up to 1.5 metres long to protect the housing block.\nBuild with the trigger. Point at a dyke and press Grip to destroy it. Press A when you are finished.", 30, FontStyles.Bold, -135, 155, TextAlignmentOptions.Center, 55).color = new Color(.35f, .82f, 1f);
         FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.1f);
         return root;
     }

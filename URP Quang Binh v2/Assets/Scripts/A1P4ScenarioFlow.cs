@@ -20,6 +20,11 @@ public sealed class A1P4ScenarioFlow : MonoBehaviour
     [SerializeField] GameObject houseG;
     [SerializeField] GameObject houseH;
 
+    [Header("A1-P4 dyke limits (metres)")]
+    [Min(1)] public int maxDykes = 1;
+    [Min(0f)] public float minDykeLengthMeters = 0f;
+    [Min(0f)] public float maxDykeLengthMeters = 3.5f;
+
     InputAction questA;
     GameObject floodPrefab, prompt, preview, previewHint, waterDirectionHint, activeFlood;
     TerrainFloodSimulation simulation;
@@ -66,7 +71,7 @@ public sealed class A1P4ScenarioFlow : MonoBehaviour
     void StartPreview()
     {
         Cleanup(ref prompt); Cleanup(ref preview); Cleanup(ref previewHint);
-        SetDykeConstruction(false); ClearDykes();
+        SetDykeConstruction(false, 0, 0f, 0f, 0f); ClearDykes();
         preview = new GameObject("Scenario_A1_P4_WaterRedistribution");
         preview.AddComponent<FloodRedistributionScenarioA1P4>();
         previewHint = ScenarioGuidanceOverlay.ShowObservation("Observe how water accumulates and redistributes");
@@ -85,7 +90,7 @@ public sealed class A1P4ScenarioFlow : MonoBehaviour
     {
         selectedAnswer = answer;
         Cleanup(ref preview);
-        SetDykeConstruction(true);
+        SetDykeConstruction(true, maxDykes, minDykeLengthMeters, maxDykeLengthMeters, 0f);
         prompt = A1P4Panel.CreateBuildingPrompt();
         waterDirectionHint = ScenarioGuidanceOverlay.ShowWaterFromLeft();
         phase = Phase.BuildingDykes;
@@ -99,7 +104,7 @@ public sealed class A1P4ScenarioFlow : MonoBehaviour
             return;
         }
         Cleanup(ref prompt); Cleanup(ref waterDirectionHint);
-        SetDykeConstruction(false);
+        SetDykeConstruction(false, 0, 0f, 0f, 0f);
         Transform parent = Find("FakeFloodEnvironment")?.transform;
         activeFlood = Instantiate(floodPrefab, parent, false);
         activeFlood.name = "Scenario_A1_P4_WithParticipantDykes";
@@ -132,7 +137,7 @@ public sealed class A1P4ScenarioFlow : MonoBehaviour
         flow.Begin(floodPrefab, viewingDuration, floodDuration);
     }
 
-    static void SetDykeConstruction(bool enabled)
+    static void SetDykeConstruction(bool enabled, int maxDykes, float minLengthMeters, float maxLengthMeters, float maxTotalLengthMeters)
     {
         DykeManagerTutorial manager = UnityEngine.Object.FindFirstObjectByType<DykeManagerTutorial>(FindObjectsInactive.Include);
         if (manager != null)
@@ -140,6 +145,8 @@ public sealed class A1P4ScenarioFlow : MonoBehaviour
             manager.gameObject.SetActive(true);
             manager.freePlacement = enabled;
             manager.enabled = enabled;
+            if (enabled) manager.ConfigureFreePlacementLimits(maxDykes, minLengthMeters, maxLengthMeters, maxTotalLengthMeters);
+            else manager.ClearFreePlacementLimits();
         }
         foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
         foreach (Transform child in root.GetComponentsInChildren<Transform>(true))
@@ -152,6 +159,7 @@ public sealed class A1P4ScenarioFlow : MonoBehaviour
         if (manager == null) return;
         manager.enabled = false;
         manager.freePlacement = false;
+        manager.ClearFreePlacementLimits();
         for (int i = manager.transform.childCount - 1; i >= 0; i--)
             UnityEngine.Object.Destroy(manager.transform.GetChild(i).gameObject);
     }
@@ -402,7 +410,7 @@ static class A1P4Panel
     {
         GameObject root = P2Panel.CanvasRoot("A1_P4_Build", new Vector2(1100, 390));
         FloodLearningUI.Text("Title", root.transform, "A1 - P4  |  Build protection", 39, FontStyles.Bold, -35, 58, TextAlignmentOptions.Center, 45);
-        FloodLearningUI.Text("Prompt", root.transform, "Build dykes for your answer anywhere on the terrain with the trigger.\nPoint at one and press Grip to destroy it. Press A when you are finished.", 30, FontStyles.Bold, -135, 125, TextAlignmentOptions.Center, 55).color = new Color(.35f, .82f, 1f);
+        FloodLearningUI.Text("Prompt", root.transform, "Build one dyke up to 3.5 metres long anywhere on the terrain with the trigger.\nPoint at it and press Grip to destroy it. Press A when you are finished.", 30, FontStyles.Bold, -135, 135, TextAlignmentOptions.Center, 55).color = new Color(.35f, .82f, 1f);
         FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.1f);
         return root;
     }

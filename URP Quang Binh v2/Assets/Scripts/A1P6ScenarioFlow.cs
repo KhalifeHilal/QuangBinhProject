@@ -21,6 +21,10 @@ public sealed class A1P6ScenarioFlow : MonoBehaviour
     [SerializeField] GameObject houseS;
     [SerializeField] GameObject hospitalB;
 
+    [Header("A1-P6 dyke limits (metres)")]
+    [Min(1)] public int maxDykes = 2;
+    [Min(0f)] public float maxTotalDykeLengthMeters = 8f;
+
     InputAction questA;
     GameObject floodPrefab, prompt, preview, previewHint, waterDirectionHint, activeFlood;
     TerrainFloodSimulation simulation;
@@ -58,7 +62,7 @@ public sealed class A1P6ScenarioFlow : MonoBehaviour
 
     void Update()
     {
-        if (phase == Phase.BuildingDykes) EnforceMaximumTwoDykes();
+        if (phase == Phase.BuildingDykes) EnforceMaximumDykes();
         if (phase == Phase.WaitingForA && questA.WasPressedThisFrame()) StartPreview();
         if (phase == Phase.BuildingDykes && questA.WasPressedThisFrame()) StartFlood();
         if (phase != Phase.Preview && phase != Phase.Flood) return;
@@ -67,19 +71,19 @@ public sealed class A1P6ScenarioFlow : MonoBehaviour
         else if (phase == Phase.Flood && elapsed >= floodDuration) FinishFlood();
     }
 
-    static void EnforceMaximumTwoDykes()
+    void EnforceMaximumDykes()
     {
         DykeManagerTutorial manager = UnityEngine.Object.FindFirstObjectByType<DykeManagerTutorial>(FindObjectsInactive.Include);
         if (manager == null) return;
         A1P1ScenarioDyke[] dykes = manager.GetComponentsInChildren<A1P1ScenarioDyke>(true);
-        for (int i = 2; i < dykes.Length; i++)
+        for (int i = maxDykes; i < dykes.Length; i++)
             if (dykes[i] != null) UnityEngine.Object.Destroy(dykes[i].gameObject);
     }
 
     void StartPreview()
     {
         Cleanup(ref prompt); Cleanup(ref preview); Cleanup(ref previewHint);
-        SetDykeConstruction(false); ClearDykes();
+        SetDykeConstruction(false, 0, 0f); ClearDykes();
         preview = new GameObject("Scenario_A1_P6_PriorityLabels");
         CreatePriorityLabels(preview.transform);
         previewHint = ScenarioGuidanceOverlay.ShowObservation("Compare building priorities and the consequences of redirected water");
@@ -98,7 +102,7 @@ public sealed class A1P6ScenarioFlow : MonoBehaviour
     {
         selectedAnswer = answer;
         Cleanup(ref preview);
-        SetDykeConstruction(true);
+        SetDykeConstruction(true, maxDykes, maxTotalDykeLengthMeters);
         prompt = A1P6Panel.CreateBuildingPrompt();
         waterDirectionHint = ScenarioGuidanceOverlay.ShowWaterFromLeft();
         phase = Phase.BuildingDykes;
@@ -112,7 +116,7 @@ public sealed class A1P6ScenarioFlow : MonoBehaviour
             return;
         }
         Cleanup(ref prompt); Cleanup(ref waterDirectionHint);
-        SetDykeConstruction(false);
+        SetDykeConstruction(false, 0, 0f);
         Transform parent = Find("FakeFloodEnvironment")?.transform;
         activeFlood = Instantiate(floodPrefab, parent, false);
         activeFlood.name = "Scenario_A1_P6_WithParticipantDykes";
@@ -138,7 +142,7 @@ public sealed class A1P6ScenarioFlow : MonoBehaviour
         A1P6Panel.ShowConfidence(selectedAnswer);
     }
 
-    static void SetDykeConstruction(bool enabled)
+    static void SetDykeConstruction(bool enabled, int maxDykes, float maxTotalLengthMeters)
     {
         DykeManagerTutorial manager = UnityEngine.Object.FindFirstObjectByType<DykeManagerTutorial>(FindObjectsInactive.Include);
         if (manager != null)
@@ -146,6 +150,8 @@ public sealed class A1P6ScenarioFlow : MonoBehaviour
             manager.gameObject.SetActive(true);
             manager.freePlacement = enabled;
             manager.enabled = enabled;
+            if (enabled) manager.ConfigureFreePlacementLimits(maxDykes, 0f, 0f, maxTotalLengthMeters);
+            else manager.ClearFreePlacementLimits();
         }
         foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
         foreach (Transform child in root.GetComponentsInChildren<Transform>(true))
@@ -158,6 +164,7 @@ public sealed class A1P6ScenarioFlow : MonoBehaviour
         if (manager == null) return;
         manager.enabled = false;
         manager.freePlacement = false;
+        manager.ClearFreePlacementLimits();
         for (int i = manager.transform.childCount - 1; i >= 0; i--)
             UnityEngine.Object.Destroy(manager.transform.GetChild(i).gameObject);
     }
@@ -293,7 +300,7 @@ static class A1P6Panel
     {
         GameObject root = P2Panel.CanvasRoot("A1_P6_Build", new Vector2(1100, 390));
         FloodLearningUI.Text("Title", root.transform, "A1 - P6  |  Build protection", 39, FontStyles.Bold, -35, 58, TextAlignmentOptions.Center, 45);
-        FloodLearningUI.Text("Prompt", root.transform, "Build up to two dykes anywhere on the terrain with the trigger.\nPoint at one and press Grip to destroy it. Press A when you are finished.", 30, FontStyles.Bold, -135, 135, TextAlignmentOptions.Center, 55).color = new Color(.35f, .82f, 1f);
+        FloodLearningUI.Text("Prompt", root.transform, "Build up to two dykes with a combined length of no more than 8 metres.\nBuild with the trigger. Point at a dyke and press Grip to destroy it. Press A when you are finished.", 30, FontStyles.Bold, -135, 145, TextAlignmentOptions.Center, 55).color = new Color(.35f, .82f, 1f);
         FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.1f);
         return root;
     }

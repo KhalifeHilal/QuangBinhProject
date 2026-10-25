@@ -227,6 +227,16 @@ sealed class FloodScenarioContinuePrompt : MonoBehaviour
         FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.1f); return root;
     }
 
+    public static GameObject ShowSimulationStart()
+    {
+        GameObject root = new GameObject("A1_P1_SimulationStartPrompt", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler)); root.GetComponent<Canvas>().renderMode = RenderMode.WorldSpace;
+        RectTransform r = (RectTransform)root.transform; r.sizeDelta = new Vector2(1000, 330); r.localScale = Vector3.one * .0015f; FloodLearningUIStyle.ApplyPanel(root.AddComponent<Image>());
+        FloodLearningUI.Text("Title", root.transform, "A1 - P1", 39, FontStyles.Bold, -35, 55, TextAlignmentOptions.Center, 45);
+        FloodLearningUI.Text("Scenario", root.transform, "Flood simulation", 43, FontStyles.Bold, -105, 65, TextAlignmentOptions.Center, 45);
+        TMP_Text prompt = FloodLearningUI.Text("Prompt", root.transform, "Press A to start the simulation", 35, FontStyles.Normal, -210, 55, TextAlignmentOptions.Center, 45); prompt.color = new Color(.35f, .82f, 1);
+        FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.1f); return root;
+    }
+
     public static GameObject ShowDykeBuilding()
     {
         GameObject root = new GameObject("A1_P1_DykeBuildingPrompt", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler)); root.GetComponent<Canvas>().renderMode = RenderMode.WorldSpace;
