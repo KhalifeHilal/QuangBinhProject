@@ -181,7 +181,9 @@ public sealed class FloodBarrierScenarioA1P2 : MonoBehaviour
         Renderer terrain = FindRenderer("SM_Tutorial_Terrain_01"); if (terrain == null) return;
         Bounds b = terrain.bounds; float y = b.max.y + .05f;
         Shader shader = Shader.Find("Universal Render Pipeline/Unlit"); if (shader == null) shader = Shader.Find("Sprites/Default");
-        material = new Material(shader) { color = new Color(.02f, .58f, 1f) };
+        // The alignments are possible barrier locations, so show them in a
+        // neutral grey rather than the blue used for flood pathways.
+        material = new Material(shader) { color = new Color(.55f, .55f, .55f, 1f) };
         Create("Barrier_A_HighTerrain", new Vector3(b.center.x, y, b.center.z + b.size.z * .22f), b.size.z * .62f, 22f, "Alignment A");
         Create("Barrier_B_LowEnds", new Vector3(b.center.x, y, b.center.z - b.size.z * .2f), b.size.z * .62f, -22f, "Alignment B");
     }
