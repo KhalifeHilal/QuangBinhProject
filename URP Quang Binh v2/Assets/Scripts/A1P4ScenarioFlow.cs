@@ -75,7 +75,7 @@ public sealed class A1P4ScenarioFlow : MonoBehaviour
         SetDykeConstruction(false, 0, 0f, 0f, 0f); ClearDykes();
         preview = new GameObject("Scenario_A1_P4_WaterRedistribution");
         preview.AddComponent<FloodRedistributionScenarioA1P4>();
-        previewHint = ScenarioGuidanceOverlay.ShowObservation("Observe how water accumulates and redistributes");
+        previewHint = ScenarioGuidanceOverlay.ShowObservation("Observe how water accumulates and redistributes", viewingDuration);
         elapsed = 0f;
         phase = Phase.Preview;
     }
@@ -429,6 +429,7 @@ static class A1P4Panel
 
     public static void ShowQuestion(Action repeat, Action<int> answer)
     {
+        FloodAudio.PlayQuestion();
         GameObject root = P2Panel.CanvasRoot("Quiz_A1_P4", new Vector2(1600, 1180));
         FloodLearningUI.Text("Title", root.transform, "A1 - P4  |  Water Redistribution", 44, FontStyles.Bold, -28, 62, TextAlignmentOptions.Left, 55);
         FloodLearningUI.Text("Scenario", root.transform, "Following construction of a barrier, water depth immediately upstream increases, flooding behind the barrier decreases, and another pathway begins carrying more water.", 29, FontStyles.Normal, -105, 100, TextAlignmentOptions.TopLeft, 55);

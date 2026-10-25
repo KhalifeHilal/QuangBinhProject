@@ -90,7 +90,7 @@ public sealed class A1P6ScenarioFlow : MonoBehaviour
         SetDykeConstruction(false, 0, 0f); ClearDykes();
         preview = new GameObject("Scenario_A1_P6_PriorityLabels");
         CreatePriorityLabels(preview.transform);
-        previewHint = ScenarioGuidanceOverlay.ShowObservation("Compare building priorities and the consequences of redirected water");
+        previewHint = ScenarioGuidanceOverlay.ShowObservation("Compare building priorities and the consequences of redirected water", viewingDuration);
         elapsed = 0f;
         phase = Phase.Preview;
     }
@@ -322,6 +322,7 @@ static class A1P6Panel
 
     public static void ShowQuestion(Action repeat, Action<int> answer)
     {
+        FloodAudio.PlayQuestion();
         GameObject root = P2Panel.CanvasRoot("Quiz_A1_P6", new Vector2(1600, 1180));
         FloodLearningUI.Text("Title", root.transform, "A1 - P6  |  System-Level Consequences", 44, FontStyles.Bold, -28, 62, TextAlignmentOptions.Left, 55);
         FloodLearningUI.Text("Scenario", root.transform,

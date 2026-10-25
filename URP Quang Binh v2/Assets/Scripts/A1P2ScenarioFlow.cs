@@ -66,7 +66,7 @@ public sealed class A1P2ScenarioFlow : MonoBehaviour
         SetDykeConstruction(false, 0, 0f, 0f, 0f); ClearDykeManagerChildren();
         preview = new GameObject("Scenario_A1_P2_BarrierAlignments");
         preview.AddComponent<FloodBarrierScenarioA1P2>();
-        previewHint = ScenarioGuidanceOverlay.ShowObservation("Look at the possible barrier alignments");
+        previewHint = ScenarioGuidanceOverlay.ShowObservation("Look at the possible barrier alignments", viewingDuration);
         elapsed = 0; phase = Phase.Preview;
     }
 
@@ -246,6 +246,7 @@ static class P2Panel
     }
     public static void ShowQuestion(Action repeat, Action<int> answer)
     {
+        FloodAudio.PlayQuestion();
         GameObject root = CanvasRoot("Quiz_A1_P2", new Vector2(1450, 1020));
         FloodLearningUI.Text("Title", root.transform, "A1 - P2  |  Topography", 44, FontStyles.Bold, -28, 62, TextAlignmentOptions.Left, 55);
         FloodLearningUI.Text("Question", root.transform, "Which barrier alignment should receive greater attention when planning flood protection?", 33, FontStyles.Bold, -110, 95, TextAlignmentOptions.TopLeft, 55);
@@ -527,6 +528,7 @@ static class GeneralDiscomfortSurvey
     public static void Show(Action onCompleted)
     {
         Close();
+        FloodAudio.PlayGeneralDiscomfort();
         panel = P2Panel.CanvasRoot("General_Discomfort_Survey", new Vector2(1350, 760));
         FloodLearningUI.Text("Title", panel.transform, "General Discomfort", 43,
             FontStyles.Bold, -40, 65, TextAlignmentOptions.Center, 45);

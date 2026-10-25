@@ -69,7 +69,7 @@ public sealed class A1P3ScenarioFlow : MonoBehaviour
         SetDykeConstruction(false, 0, 0f, 0f, 0f); ClearDykes();
         preview = new GameObject("Scenario_A1_P3_WesternEndpointBypass");
         preview.AddComponent<FloodBarrierScenarioA1P3>();
-        previewHint = ScenarioGuidanceOverlay.ShowObservation("Observe what happens around the barrier");
+        previewHint = ScenarioGuidanceOverlay.ShowObservation("Observe what happens around the barrier", viewingDuration);
         elapsed = 0f;
         phase = Phase.Preview;
     }
@@ -399,6 +399,7 @@ static class P3Panel
 
     public static void ShowQuestion(Action repeat, Action<int> answer)
     {
+        FloodAudio.PlayQuestion();
         GameObject root = P2Panel.CanvasRoot("Quiz_A1_P3", new Vector2(1550, 1120));
         FloodLearningUI.Text("Title", root.transform, "A1 - P3  |  Barrier Continuity & Bypassing", 44, FontStyles.Bold, -28, 62, TextAlignmentOptions.Left, 55);
         FloodLearningUI.Text("Scenario", root.transform, "A barrier substantially reduces direct flow toward a settlement. Several minutes later, however, water enters the protected area from around its western end. The barrier itself has not overtopped or failed.", 28, FontStyles.Normal, -105, 105, TextAlignmentOptions.TopLeft, 55);

@@ -79,7 +79,7 @@ public sealed class A1P5ScenarioFlow : MonoBehaviour
         SetP5ScenarioObjects(true);
         preview = new GameObject("Scenario_A1_P5_AuthoredStrategies");
         CreateStrategyLabels(preview.transform);
-        previewHint = ScenarioGuidanceOverlay.ShowObservation("Compare protection gained per metre of barrier");
+        previewHint = ScenarioGuidanceOverlay.ShowObservation("Compare protection gained per metre of barrier", viewingDuration);
         elapsed = 0f;
         phase = Phase.Preview;
     }
@@ -326,6 +326,7 @@ static class A1P5Panel
 
     public static void ShowQuestion(Action repeat, Action<int> answer)
     {
+        FloodAudio.PlayQuestion();
         GameObject root = P2Panel.CanvasRoot("Quiz_A1_P5", new Vector2(1600, 1180));
         FloodLearningUI.Text("Title", root.transform, "A1 - P5  |  Resource-Efficient Placement", 44, FontStyles.Bold, -28, 62, TextAlignmentOptions.Left, 55);
         FloodLearningUI.Text("Scenario", root.transform, "A residential housing block needs protection. Three strategies produce the following outcomes:\nStrategy A: 1.5 m barrier, 2 buildings protected\nStrategy B: 1.5 m barrier, 3 buildings protected\nStrategy C: 2.5 m barrier, 4 buildings protected", 28, FontStyles.Normal, -105, 165, TextAlignmentOptions.TopLeft, 55);

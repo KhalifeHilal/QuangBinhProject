@@ -245,6 +245,7 @@ public class DykeManagerTutorial : MonoBehaviour
         if (scenarioDyke != null)
         {
             SetHoveredScenarioDyke(null);
+            FloodAudio.PlayDykeRemoved();
             Destroy(scenarioDyke.gameObject);
         }
     }
@@ -385,6 +386,7 @@ public class DykeManagerTutorial : MonoBehaviour
         // AddInteraction(dyke);
 
         dykeBuilt++;
+        FloodAudio.PlayDykeBuilt();
     }
 
     float CurrentFreePlacementLengthMeters()
@@ -475,6 +477,7 @@ public class DykeManagerTutorial : MonoBehaviour
             Destroy(interaction.gameObject);
 
             dykeDestroyed++;
+            FloodAudio.PlayDykeRemoved();
         }
     }
 

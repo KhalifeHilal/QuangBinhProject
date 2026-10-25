@@ -5,11 +5,16 @@ using UnityEngine.UI;
 
 public static class ScenarioGuidanceOverlay
 {
-    public static GameObject ShowObservation(string message)
+    public static GameObject ShowObservation(string message, float durationSeconds = 0f)
     {
-        GameObject root = CreateCanvas("Scenario_Observation_Hint", new Vector2(900, 145), .0014f);
+        GameObject root = CreateCanvas("Scenario_Observation_Hint", new Vector2(900, 205), .0014f);
         FloodLearningUI.Text("Text", root.transform, message, 40, FontStyles.Bold,
             -25, 90, TextAlignmentOptions.Center, 30);
+        TMP_Text timerText = FloodLearningUI.Text("Timer", root.transform, "Time remaining: -- s", 30,
+            FontStyles.Bold, -125, 45, TextAlignmentOptions.Center, 30);
+        timerText.color = new Color(.35f, .82f, 1f);
+        ScenarioPreviewTimer timer = root.AddComponent<ScenarioPreviewTimer>();
+        timer.Initialize(timerText, durationSeconds);
         FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.05f);
         root.transform.position += Vector3.up * .25f;
         return root;
@@ -58,6 +63,38 @@ public static class ScenarioGuidanceOverlay
         foreach (Transform child in root.GetComponentsInChildren<Transform>(true))
             if (child.name == name) return child.GetComponentInChildren<Renderer>(true);
         return null;
+    }
+}
+
+/// <summary>Counts down the remaining observation time inside the guidance panel.</summary>
+public sealed class ScenarioPreviewTimer : MonoBehaviour
+{
+    TMP_Text label;
+    float remaining;
+
+    public void Initialize(TMP_Text timerLabel, float durationSeconds)
+    {
+        label = timerLabel;
+        remaining = Mathf.Max(0f, durationSeconds);
+        UpdateLabel();
+    }
+
+    void Update()
+    {
+        if (remaining <= 0f)
+        {
+            UpdateLabel();
+            return;
+        }
+
+        remaining = Mathf.Max(0f, remaining - Time.deltaTime);
+        UpdateLabel();
+    }
+
+    void UpdateLabel()
+    {
+        if (label == null) return;
+        label.text = $"Time remaining: {Mathf.CeilToInt(remaining)} s";
     }
 }
 

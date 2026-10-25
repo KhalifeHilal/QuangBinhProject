@@ -101,7 +101,7 @@ public sealed class PlayMakerTerrainFloodScenario03 : MonoBehaviour
         activeScenario = new GameObject("Scenario_A1_P1_PathwayPreview");
         activeScenario.transform.SetParent(parent, false);
         activeScenario.AddComponent<FloodPathwayScenarioA1P1>();
-        observationHint = ScenarioGuidanceOverlay.ShowObservation("Look at the pathways");
+        observationHint = ScenarioGuidanceOverlay.ShowObservation("Look at the pathways", pathwayViewingDuration);
         elapsed = 0;
         phase = Phase.Preview;
     }

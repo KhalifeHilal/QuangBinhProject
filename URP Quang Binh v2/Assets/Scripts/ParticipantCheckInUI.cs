@@ -219,7 +219,8 @@ public sealed class ParticipantCheckInUI : MonoBehaviour
         rect.anchorMin = rect.anchorMax = new Vector2(.5f, 1f); rect.pivot = new Vector2(.5f, 1f);
         rect.anchoredPosition = new Vector2(x, top); rect.sizeDelta = new Vector2(width, numberUp || numberDown ? 64f : 90f);
         Image image = obj.GetComponent<Image>(); FloodLearningUIStyle.ApplyButton(image);
-        Button button = obj.GetComponent<Button>(); button.onClick.AddListener(action);
+        Button button = obj.GetComponent<Button>();
+        button.onClick.AddListener(() => { FloodAudio.PlayClick(); action?.Invoke(); });
         ColorBlock colors = button.colors; colors.highlightedColor = new Color(.12f, .65f, .9f); colors.pressedColor = new Color(.04f, .75f, 1f); button.colors = colors;
         if (numberUp || numberDown)
         {

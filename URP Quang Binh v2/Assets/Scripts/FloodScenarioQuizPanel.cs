@@ -25,6 +25,7 @@ public sealed class FloodScenarioQuizPanel : MonoBehaviour
 
     public static FloodScenarioQuizPanel Show(Action onRepeatScenario, Action<int> onAnswerSubmitted)
     {
+        FloodAudio.PlayQuestion();
         GameObject root = new GameObject("Quiz_A1_P1", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(TrackedDeviceGraphicRaycaster));
         FloodScenarioQuizPanel panel = root.AddComponent<FloodScenarioQuizPanel>();
         panel.repeatScenario = onRepeatScenario;
@@ -183,7 +184,8 @@ static class FloodLearningUI
         GameObject obj = new GameObject(name, typeof(RectTransform), typeof(Image), typeof(Button)); obj.transform.SetParent(parent, false);
         RectTransform r = (RectTransform)obj.transform; r.anchorMin = r.anchorMax = new Vector2(.5f, 1); r.pivot = new Vector2(.5f, 1); r.anchoredPosition = new Vector2(0, top); r.sizeDelta = new Vector2(width < 0 ? 1340 : width, height);
         Image image = obj.GetComponent<Image>(); FloodLearningUIStyle.ApplyButton(image);
-        Button button = obj.GetComponent<Button>(); ColorBlock colors = button.colors; colors.highlightedColor = new Color(.08f, .46f, .68f, 1); colors.pressedColor = new Color(.04f, .64f, .88f, 1); button.colors = colors; button.onClick.AddListener(action);
+        Button button = obj.GetComponent<Button>(); ColorBlock colors = button.colors; colors.highlightedColor = new Color(.08f, .46f, .68f, 1); colors.pressedColor = new Color(.04f, .64f, .88f, 1); button.colors = colors;
+        button.onClick.AddListener(() => { FloodAudio.PlayClick(); action?.Invoke(); });
         TMP_Text text = Text("Label", obj.transform, label, fontSize, FontStyles.Normal, -8, height - 16, TextAlignmentOptions.MidlineLeft, 25); text.enableAutoSizing = true; text.fontSizeMin = 20; text.fontSizeMax = fontSize;
         return button;
     }
