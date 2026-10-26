@@ -1,6 +1,8 @@
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using HutongGames.PlayMaker.ActionsInternal;
+using TMPro;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
@@ -53,6 +55,7 @@ public class DykeManagerTutorial : MonoBehaviour
     Renderer placementTerrainRenderer;
     GameObject placementMarker;
     A1P1ScenarioDyke hoveredScenarioDyke;
+    DykeLengthLabel futureLengthLabel;
 
     void Awake()
     {
@@ -66,6 +69,7 @@ public class DykeManagerTutorial : MonoBehaviour
         scenarioGrip?.Disable();
         SetHoveredScenarioDyke(null);
         if (placementMarker != null) { Destroy(placementMarker); placementMarker = null; }
+        HideFutureLengthLabel();
     }
 
     void Start()
@@ -278,6 +282,7 @@ public class DykeManagerTutorial : MonoBehaviour
                 DestroyImmediate(futureDyke);
                 futureDyke = null;
             }
+            HideFutureLengthLabel();
 
             if (inTriggerPress)
             {
@@ -312,6 +317,9 @@ public class DykeManagerTutorial : MonoBehaviour
 
             Vector2[] pts = new Vector2[5];
             Vector3 _endPoint = raycastHit.point;
+            float horizontalDistance = HorizontalDistance(startPoint, _endPoint);
+            EnsureFutureLengthLabel();
+            futureLengthLabel.SetPreview(startPoint, _endPoint, horizontalDistance);
             Vector2 direction = new Vector2(_endPoint.x - startPoint.x, _endPoint.z - startPoint.z).normalized;
             Vector2 Per = Vector2.Perpendicular(direction);
             Per = new Vector2(Per.x * perMultiplier, Per.y * perMultiplier);
@@ -335,6 +343,10 @@ public class DykeManagerTutorial : MonoBehaviour
                 previewPosition.y = Mathf.Min(startPoint.y, _endPoint.y) + 0.005f;
                 futureDyke.transform.position = previewPosition;
             }
+        }
+        else
+        {
+            HideFutureLengthLabel();
         }
     }
 
@@ -383,12 +395,34 @@ public class DykeManagerTutorial : MonoBehaviour
             ScenarioDykeLength length = dyke.AddComponent<ScenarioDykeLength>();
             length.lengthMeters = horizontalDistance;
             length.dykeId = FloodStudyLogger.RecordDykeBuilt(startPoint, endPoint, horizontalDistance);
+            DykeLengthLabel.Attach(dyke, horizontalDistance);
         }
 
         // AddInteraction(dyke);
 
         dykeBuilt++;
         FloodAudio.PlayDykeBuilt();
+    }
+
+    static float HorizontalDistance(Vector3 start, Vector3 end)
+    {
+        Vector3 delta = end - start;
+        delta.y = 0f;
+        return delta.magnitude;
+    }
+
+    void EnsureFutureLengthLabel()
+    {
+        if (futureLengthLabel != null) return;
+        GameObject labelObject = new GameObject("FutureDykeLengthLabel");
+        futureLengthLabel = labelObject.AddComponent<DykeLengthLabel>();
+    }
+
+    void HideFutureLengthLabel()
+    {
+        if (futureLengthLabel == null) return;
+        Destroy(futureLengthLabel.gameObject);
+        futureLengthLabel = null;
     }
 
     float CurrentFreePlacementLengthMeters()
@@ -499,6 +533,7 @@ public class DykeManagerTutorial : MonoBehaviour
     {
         scenarioGrip?.Disable();
         scenarioGrip?.Dispose();
+        HideFutureLengthLabel();
     }
 }
 
@@ -507,4 +542,124 @@ sealed class ScenarioDykeLength : MonoBehaviour
 {
     public float lengthMeters;
     public int dykeId;
+}
+
+/// <summary>
+/// Displays the current horizontal dyke length above a participant-built dyke.
+/// For a drag preview the label is kept independent from the temporary preview
+/// mesh, so it can be updated without allocating a new canvas every frame.
+/// </summary>
+sealed class DykeLengthLabel : MonoBehaviour
+{
+    [Min(.01f)] [SerializeField] float worldScale = .18f;
+    [Min(0f)] [SerializeField] float heightOffset = .28f;
+
+    TextMeshPro label;
+    float lengthMeters;
+    bool preview;
+    Vector3 previewStart;
+    Vector3 previewEnd;
+
+    void Awake()
+    {
+        CreateLabel();
+    }
+
+    public static void Attach(GameObject dyke, float length)
+    {
+        if (dyke == null) return;
+        DykeLengthLabel display = dyke.GetComponent<DykeLengthLabel>();
+        if (display == null) display = dyke.AddComponent<DykeLengthLabel>();
+        display.SetLength(length);
+    }
+
+    public void SetLength(float length)
+    {
+        preview = false;
+        lengthMeters = Mathf.Max(0f, length);
+        UpdateText();
+    }
+
+    public void SetPreview(Vector3 start, Vector3 end, float length)
+    {
+        preview = true;
+        previewStart = start;
+        previewEnd = end;
+        lengthMeters = Mathf.Max(0f, length);
+        UpdateText();
+    }
+
+    void LateUpdate()
+    {
+        if (label == null) CreateLabel();
+        if (label == null) return;
+
+        Bounds bounds;
+        if (preview)
+        {
+            Vector3 center = (previewStart + previewEnd) * .5f;
+            float y = Mathf.Max(previewStart.y, previewEnd.y);
+            bounds = new Bounds(new Vector3(center.x, y, center.z), Vector3.zero);
+        }
+        else
+        {
+            Renderer[] renderers = GetComponentsInChildren<Renderer>(true);
+            if (!TryGetBounds(renderers, out bounds))
+                bounds = new Bounds(transform.position, Vector3.zero);
+        }
+
+        label.transform.position = bounds.center + Vector3.up * (bounds.extents.y + heightOffset);
+        label.transform.localScale = Vector3.one * worldScale;
+
+        Camera camera = Camera.main;
+        if (camera != null)
+        {
+            Vector3 direction = label.transform.position - camera.transform.position;
+            if (direction.sqrMagnitude > .0001f)
+                label.transform.rotation = Quaternion.LookRotation(direction.normalized, Vector3.up);
+        }
+    }
+
+    void CreateLabel()
+    {
+        if (label != null) return;
+        GameObject textObject = new GameObject("Length");
+        label = textObject.AddComponent<TextMeshPro>();
+        label.font = TMP_Settings.defaultFontAsset;
+        FloodLearningUIStyle.ApplyFont(label);
+        label.alignment = TextAlignmentOptions.Center;
+        label.horizontalAlignment = HorizontalAlignmentOptions.Center;
+        label.verticalAlignment = VerticalAlignmentOptions.Middle;
+        label.fontSize = 2.2f;
+        label.enableWordWrapping = false;
+        label.color = Color.white;
+        label.outlineWidth = .22f;
+        label.outlineColor = Color.black;
+        UpdateText();
+    }
+
+    void UpdateText()
+    {
+        if (label != null)
+            label.text = lengthMeters.ToString("F1", CultureInfo.InvariantCulture) + " m";
+    }
+
+    static bool TryGetBounds(Renderer[] renderers, out Bounds bounds)
+    {
+        bounds = default;
+        bool hasBounds = false;
+        if (renderers == null) return false;
+        foreach (Renderer renderer in renderers)
+        {
+            if (renderer == null) continue;
+            if (!hasBounds) { bounds = renderer.bounds; hasBounds = true; }
+            else bounds.Encapsulate(renderer.bounds);
+        }
+        return hasBounds;
+    }
+
+    void OnDestroy()
+    {
+        if (label != null) Destroy(label.gameObject);
+    }
 }
