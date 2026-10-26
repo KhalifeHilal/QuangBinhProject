@@ -410,13 +410,23 @@ public sealed class RedistributionFlowMarker : MonoBehaviour
 
 static class A1P4Panel
 {
-    static readonly string[] Answers =
+    static readonly string[] AnswersA =
     {
         "A) The barrier has completely solved the flooding problem.",
         "B) The upstream rise proves the intervention did not work.",
         "C) The barrier changed flow paths and upstream storage.",
         "D) The other pathway must be unrelated to the intervention."
     };
+    static readonly string[] AnswersB =
+    {
+        "A) Backwater effect",
+        "B) Floodwave attenuation",
+        "C) Channel overtopping",
+        "D) Water redistribution"
+    };
+    static bool UseB => ParticipantSession.IsCheckedIn && ParticipantSession.QuestionSet == ParticipantQuestionSet.B;
+    static string[] CurrentAnswers => UseB ? AnswersB : AnswersA;
+    static int CorrectAnswerIndex => UseB ? 3 : 2;
 
     public static GameObject CreateStartPrompt()
     {
@@ -441,13 +451,17 @@ static class A1P4Panel
     {
         FloodAudio.PlayQuestion();
         GameObject root = P2Panel.CanvasRoot("Quiz_A1_P4", new Vector2(1600, 1180));
-        FloodLearningUI.Text("Title", root.transform, "A1 - P4  |  Water Redistribution", 44, FontStyles.Bold, -28, 62, TextAlignmentOptions.Left, 55);
+        string prefix = UseB ? "B1" : "A1";
+        string question = UseB
+            ? "Which term describes the shifting of floodwater from one flow pathway to another when its movement is altered?"
+            : "What best explains the combination of upstream accumulation and additional flow elsewhere?";
+        FloodLearningUI.Text("Title", root.transform, prefix + " - P4  |  Water Redistribution", 44, FontStyles.Bold, -28, 62, TextAlignmentOptions.Left, 55);
         FloodLearningUI.Text("Scenario", root.transform, "Following construction of a barrier, water depth immediately upstream increases, flooding behind the barrier decreases, and another pathway begins carrying more water.", 29, FontStyles.Normal, -105, 100, TextAlignmentOptions.TopLeft, 55);
-        FloodLearningUI.Text("Question", root.transform, "What best explains the combination of upstream accumulation and additional flow elsewhere?", 34, FontStyles.Bold, -220, 65, TextAlignmentOptions.TopLeft, 55);
-        for (int i = 0; i < Answers.Length; i++)
+        FloodLearningUI.Text("Question", root.transform, question, 34, FontStyles.Bold, -220, 65, TextAlignmentOptions.TopLeft, 55);
+        for (int i = 0; i < CurrentAnswers.Length; i++)
         {
             int n = i;
-            FloodLearningUI.Button("Answer_" + (char)('A' + i), root.transform, Answers[i], -300 - i * 145, 120, 25,
+            FloodLearningUI.Button("Answer_" + (char)('A' + i), root.transform, CurrentAnswers[i], -300 - i * 145, 120, 25,
                 () => { UnityEngine.Object.Destroy(root); answer(n); }, 1500);
         }
         FloodLearningUI.Button("Repeat", root.transform, "Repeat scenario", -895, 82, 29,
@@ -483,19 +497,26 @@ static class A1P4Panel
     static void ShowFeedback(GameObject root, int answer, int confidence, Action onCompleted)
     {
         foreach (Transform child in root.transform) UnityEngine.Object.Destroy(child.gameObject);
+        string prefix = UseB ? "B1" : "A1";
+        string correctText = UseB
+            ? "Correct answer: D) Water redistribution"
+            : "Correct answer: C) The barrier changed flow paths and upstream storage.";
+        string explanation = UseB
+            ? "Water redistribution means that floodwater shifts to another route after an intervention changes the flow system."
+            : "The observed pattern is consistent with a barrier successfully reducing flow through one route while increasing upstream storage and encouraging water to use another pathway. Effective evaluation therefore requires looking beyond the protected area.";
         TMP_Text result = FloodLearningUI.Text("Result", root.transform,
-            answer == 2 ? $"Correct!  |  Confidence: {confidence}%" : $"Your answer: {(char)('A' + answer)}  |  Confidence: {confidence}%",
+            answer == CorrectAnswerIndex ? $"Correct!  |  Confidence: {confidence}%" : $"Your answer: {(char)('A' + answer)}  |  Confidence: {confidence}%",
             39, FontStyles.Bold, -105, 62, TextAlignmentOptions.Center, 65);
-        result.color = answer == 2 ? new Color(.4f, 1f, .55f) : new Color(1f, .68f, .35f);
+        result.color = answer == CorrectAnswerIndex ? new Color(.4f, 1f, .55f) : new Color(1f, .68f, .35f);
         FloodLearningUI.Text("Correct", root.transform,
-            "Correct answer: C) The barrier changed flow paths and upstream storage.",
+            correctText,
             30, FontStyles.Bold, -205, 175, TextAlignmentOptions.TopLeft, 70).color = new Color(.4f, 1f, .55f);
         FloodLearningUI.Text("ExplanationTitle", root.transform, "Explanation", 34, FontStyles.Bold, -415, 55, TextAlignmentOptions.Left, 70);
         FloodLearningUI.Text("Explanation", root.transform,
-            "The observed pattern is consistent with a barrier successfully reducing flow through one route while increasing upstream storage and encouraging water to use another pathway. Effective evaluation therefore requires looking beyond the protected area.",
+            explanation,
             29, FontStyles.Normal, -485, 235, TextAlignmentOptions.TopLeft, 70);
         FloodLearningUI.Button("Finish", root.transform, "Finish", -780, 82, 29,
             () => { UnityEngine.Object.Destroy(root); onCompleted?.Invoke(); }, 360);
-        Debug.Log($"A1-P4 result: answer={(char)('A' + answer)}, correct={answer == 2}, confidence={confidence}");
+        Debug.Log($"{prefix}-P4 result: answer={(char)('A' + answer)}, correct={answer == CorrectAnswerIndex}, confidence={confidence}");
     }
 }

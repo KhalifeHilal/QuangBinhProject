@@ -732,6 +732,20 @@ public static class FloodStudyLogger
 
     static int CorrectAnswerIndex(string scenario)
     {
+        bool useBQuestions = ParticipantSession.IsCheckedIn &&
+            ParticipantSession.QuestionSet == ParticipantQuestionSet.B;
+        if (useBQuestions)
+        {
+            switch (scenario)
+            {
+                case "A1-P1": return 3; // B1-P1: Path B follows the low corridor.
+                case "A1-P2": return 1; // B1-P2: high terrain closes the endpoints.
+                case "A1-P3": return 2; // B1-P3: water bypasses the open endpoint.
+                case "A1-P4": return 3; // B1-P4: water redistribution.
+                case "A1-P5": return 2; // B1-P5: Strategy B has the best ratio.
+                case "A1-P6": return 0; // B1-P6: evaluate system-wide consequences.
+            }
+        }
         switch (scenario)
         {
             case "A1-P1": return 1;

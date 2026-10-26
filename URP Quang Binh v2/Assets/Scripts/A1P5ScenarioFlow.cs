@@ -307,13 +307,23 @@ public sealed class A1P5ScenarioFlow : MonoBehaviour
 
 static class A1P5Panel
 {
-    static readonly string[] Answers =
+    static readonly string[] AnswersA =
     {
         "A) Strategy A, with 2 buildings protected by a 1.5 m barrier.",
         "B) Strategy B, with 3 buildings protected by a 1.5 m barrier.",
         "C) Strategy C, with 4 buildings protected by a 2.5 m barrier.",
         "D) Strategies A and C provide the same ratio."
     };
+    static readonly string[] AnswersB =
+    {
+        "A) Strategy A: about 1.3 buildings per metre.",
+        "B) Strategy C: about 1.6 buildings per metre.",
+        "C) Strategy B: 2 buildings per metre.",
+        "D) All three have the same efficiency."
+    };
+    static bool UseB => ParticipantSession.IsCheckedIn && ParticipantSession.QuestionSet == ParticipantQuestionSet.B;
+    static string[] CurrentAnswers => UseB ? AnswersB : AnswersA;
+    static int CorrectAnswerIndex => UseB ? 2 : 1;
 
     public static GameObject CreateStartPrompt()
     {
@@ -338,13 +348,17 @@ static class A1P5Panel
     {
         FloodAudio.PlayQuestion();
         GameObject root = P2Panel.CanvasRoot("Quiz_A1_P5", new Vector2(1600, 1180));
-        FloodLearningUI.Text("Title", root.transform, "A1 - P5  |  Resource-Efficient Placement", 44, FontStyles.Bold, -28, 62, TextAlignmentOptions.Left, 55);
+        string prefix = UseB ? "B1" : "A1";
+        string question = UseB
+            ? "Which strategy protects the most buildings for each metre of barrier?"
+            : "Which strategy protects the most buildings per metre of barrier?";
+        FloodLearningUI.Text("Title", root.transform, prefix + " - P5  |  Resource-Efficient Placement", 44, FontStyles.Bold, -28, 62, TextAlignmentOptions.Left, 55);
         FloodLearningUI.Text("Scenario", root.transform, "A residential housing block needs protection. Three strategies produce the following outcomes:\nStrategy A: 1.5 m barrier, 2 buildings protected\nStrategy B: 1.5 m barrier, 3 buildings protected\nStrategy C: 2.5 m barrier, 4 buildings protected", 28, FontStyles.Normal, -105, 165, TextAlignmentOptions.TopLeft, 55);
-        FloodLearningUI.Text("Question", root.transform, "Which strategy protects the most buildings per metre of barrier?", 32, FontStyles.Bold, -285, 95, TextAlignmentOptions.TopLeft, 55);
-        for (int i = 0; i < Answers.Length; i++)
+        FloodLearningUI.Text("Question", root.transform, question, 32, FontStyles.Bold, -285, 95, TextAlignmentOptions.TopLeft, 55);
+        for (int i = 0; i < CurrentAnswers.Length; i++)
         {
             int n = i;
-            FloodLearningUI.Button("Answer_" + (char)('A' + i), root.transform, Answers[i], -395 - i * 145, 120, 25,
+            FloodLearningUI.Button("Answer_" + (char)('A' + i), root.transform, CurrentAnswers[i], -395 - i * 145, 120, 25,
                 () => { UnityEngine.Object.Destroy(root); answer(n); }, 1500);
         }
         FloodLearningUI.Button("Repeat", root.transform, "Repeat scenario", -990, 82, 29,
@@ -380,19 +394,26 @@ static class A1P5Panel
     static void ShowFeedback(GameObject root, int answer, int confidence, Action onCompleted)
     {
         foreach (Transform child in root.transform) UnityEngine.Object.Destroy(child.gameObject);
+        string prefix = UseB ? "B1" : "A1";
+        string correctText = UseB
+            ? "Correct answer: C) Strategy B: 2 buildings per metre."
+            : "Correct answer: B) Strategy B, with 3 buildings protected by a 1.5 m barrier.";
+        string explanation = UseB
+            ? "Strategy A protects about 1.3 buildings per metre, Strategy B protects 2, and Strategy C protects about 1.6. Strategy B is therefore the most resource-efficient."
+            : "Strategy A: 2 / 1.5 = about 1.3 buildings/m\nStrategy B: 3 / 1.5 = 2 buildings/m\nStrategy C: 4 / 2.5 = about 1.6 buildings/m\n\nStrategy B provides the highest protection per metre of barrier, even though Strategy C protects more buildings in total. This makes Strategy B the most resource-efficient placement strategy.";
         TMP_Text result = FloodLearningUI.Text("Result", root.transform,
-            answer == 1 ? $"Correct!  |  Confidence: {confidence}%" : $"Your answer: {(char)('A' + answer)}  |  Confidence: {confidence}%",
+            answer == CorrectAnswerIndex ? $"Correct!  |  Confidence: {confidence}%" : $"Your answer: {(char)('A' + answer)}  |  Confidence: {confidence}%",
             39, FontStyles.Bold, -105, 62, TextAlignmentOptions.Center, 65);
-        result.color = answer == 1 ? new Color(.4f, 1f, .55f) : new Color(1f, .68f, .35f);
+        result.color = answer == CorrectAnswerIndex ? new Color(.4f, 1f, .55f) : new Color(1f, .68f, .35f);
         FloodLearningUI.Text("Correct", root.transform,
-            "Correct answer: B) Strategy B, with 3 buildings protected by a 1.5 m barrier.",
+            correctText,
             31, FontStyles.Bold, -205, 120, TextAlignmentOptions.TopLeft, 70).color = new Color(.4f, 1f, .55f);
         FloodLearningUI.Text("ExplanationTitle", root.transform, "Explanation", 34, FontStyles.Bold, -370, 55, TextAlignmentOptions.Left, 70);
         FloodLearningUI.Text("Explanation", root.transform,
-            "Strategy A: 2 / 1.5 = about 1.3 buildings/m\nStrategy B: 3 / 1.5 = 2 buildings/m\nStrategy C: 4 / 2.5 = about 1.6 buildings/m\n\nStrategy B provides the highest protection per metre of barrier, even though Strategy C protects more buildings in total. This makes Strategy B the most resource-efficient placement strategy.",
+            explanation,
             30, FontStyles.Normal, -435, 230, TextAlignmentOptions.TopLeft, 70);
         FloodLearningUI.Button("Finish", root.transform, "Finish", -735, 82, 29,
             () => { UnityEngine.Object.Destroy(root); onCompleted?.Invoke(); }, 360);
-        Debug.Log($"A1-P5 result: answer={(char)('A' + answer)}, correct={answer == 1}, confidence={confidence}");
+        Debug.Log($"{prefix}-P5 result: answer={(char)('A' + answer)}, correct={answer == CorrectAnswerIndex}, confidence={confidence}");
     }
 }

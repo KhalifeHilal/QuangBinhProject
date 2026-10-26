@@ -6,12 +6,19 @@ using UnityEngine.XR.Interaction.Toolkit.UI;
 
 public sealed class FloodScenarioQuizPanel : MonoBehaviour
 {
-    static readonly string[] Answers =
+    static readonly string[] AnswersA =
     {
         "A) Path A: its shorter distance to the district.",
         "B) Path B: its connected low-lying terrain.",
         "C) Both: elevation and distance cancel each other out.",
         "D) Path A: its higher ground creates stronger flow."
+    };
+    static readonly string[] AnswersB =
+    {
+        "A) Path A; high ground pulls water toward the district.",
+        "B) Both paths; distance and elevation have equal weight.",
+        "C) Path A; shorter routes carry water first.",
+        "D) Path B; connected low terrain forms a continuous route."
     };
     readonly Button[] answerButtons = new Button[4];
     GameObject questionGroup, confidenceGroup, feedbackGroup;
@@ -22,6 +29,12 @@ public sealed class FloodScenarioQuizPanel : MonoBehaviour
     Action<int> answerSubmitted;
     Action confidenceCompleted;
     bool confidenceOnly;
+
+    static bool UseB => ParticipantSession.IsCheckedIn &&
+                        ParticipantSession.QuestionSet == ParticipantQuestionSet.B;
+    static string SessionPrefix => UseB ? "B1" : "A1";
+    static string[] CurrentAnswers => UseB ? AnswersB : AnswersA;
+    static int CorrectAnswerIndex => UseB ? 3 : 1;
 
     public static FloodScenarioQuizPanel Show(Action onRepeatScenario, Action<int> onAnswerSubmitted)
     {
@@ -63,12 +76,21 @@ public sealed class FloodScenarioQuizPanel : MonoBehaviour
         FloodLearningUI.Text("Title", transform, "A1 — P1  |  Flood Pathway Identification", 44, FontStyles.Bold, -28, 62, TextAlignmentOptions.Left, 55);
 
         questionGroup = FloodLearningUI.Group("QuestionGroup", transform);
+        // Keep the authored A title unchanged and relabel only the B session.
+        if (UseB)
+            transform.Find("Title")?.GetComponent<TMP_Text>()?.SetText("B1 - P1  |  Flood Pathway Identification");
+        string scenarioText = UseB
+            ? "Scenario: A settlement is exposed to two possible flood routes. Path A is shorter but crosses higher ground. Path B is longer but follows a connected low corridor."
+            : "Scenario: A residential district needs to be protected. Path A is shorter but crosses relatively elevated terrain. Path B is longer but follows a continuous low-elevation corridor.";
+        string questionText = UseB
+            ? "Which route is more likely to carry floodwater toward the settlement?"
+            : "Which pathway is most likely to carry floodwater toward the district?";
         TMP_Text scenario = FloodLearningUI.Text("Scenario", questionGroup.transform,
-            "Scenario: A residential district needs to be protected. Path A is shorter but crosses relatively elevated terrain. Path B is longer but follows a continuous low-elevation corridor.",
+            scenarioText,
             28, FontStyles.Normal, -105, 105, TextAlignmentOptions.TopLeft, 55);
         scenario.color = new Color(.88f, .94f, 1f);
-        FloodLearningUI.Text("Question", questionGroup.transform, "Which pathway is most likely to carry floodwater toward the district?", 34, FontStyles.Bold, -235, 90, TextAlignmentOptions.TopLeft, 55);
-        for (int i = 0; i < Answers.Length; i++) answerButtons[i] = CreateAnswerButton(i, -350 - i * 125);
+        FloodLearningUI.Text("Question", questionGroup.transform, questionText, 34, FontStyles.Bold, -235, 90, TextAlignmentOptions.TopLeft, 55);
+        for (int i = 0; i < CurrentAnswers.Length; i++) answerButtons[i] = CreateAnswerButton(i, -350 - i * 125);
         TMP_Text hint = FloodLearningUI.Text("Hint", questionGroup.transform, "Point at an answer and confirm it with the controller trigger.", 27, FontStyles.Normal, -875, 55, TextAlignmentOptions.Center, 55);
         hint.color = new Color(.72f, .86f, 1);
         FloodLearningUI.Button("RepeatScenario", questionGroup.transform, "Repeat scenario", -965, 82, 29, RepeatScenario, 390);
@@ -80,7 +102,7 @@ public sealed class FloodScenarioQuizPanel : MonoBehaviour
         if (confidenceOnly) UpdateConfidenceText(confidenceSlider.value);
     }
 
-    Button CreateAnswerButton(int index, float top) => FloodLearningUI.Button($"Answer_{(char)('A' + index)}", questionGroup.transform, Answers[index], top, 102, 27, () => SelectAnswer(index));
+    Button CreateAnswerButton(int index, float top) => FloodLearningUI.Button($"Answer_{(char)('A' + index)}", questionGroup.transform, CurrentAnswers[index], top, 102, 27, () => SelectAnswer(index));
 
     void BuildConfidenceStep()
     {
@@ -99,10 +121,16 @@ public sealed class FloodScenarioQuizPanel : MonoBehaviour
     {
         feedbackGroup = FloodLearningUI.Group("FeedbackGroup", transform);
         FloodLearningUI.Text("Result", feedbackGroup.transform, "", 39, FontStyles.Bold, -120, 62, TextAlignmentOptions.Center, 65);
-        TMP_Text correct = FloodLearningUI.Text("CorrectAnswer", feedbackGroup.transform, "Correct answer: B) Path B: its connected low-lying terrain.", 31, FontStyles.Bold, -220, 135, TextAlignmentOptions.TopLeft, 70);
+        string correctText = UseB
+            ? "Correct answer: D) Path B; connected low terrain forms a continuous route."
+            : "Correct answer: B) Path B: its connected low-lying terrain.";
+        string explanation = UseB
+            ? "Floodwater is more likely to follow connected low terrain. A shorter route is not necessarily the dominant pathway if it crosses higher ground."
+            : "Floodwater movement is strongly influenced by terrain connectivity and elevation. A longer but continuously low-lying corridor can provide a more plausible route than a shorter route that requires water to cross substantially higher terrain. Straight-line distance alone is therefore not sufficient for identifying the dominant flood pathway.";
+        TMP_Text correct = FloodLearningUI.Text("CorrectAnswer", feedbackGroup.transform, correctText, 31, FontStyles.Bold, -220, 135, TextAlignmentOptions.TopLeft, 70);
         correct.color = new Color(.4f, 1, .55f);
         FloodLearningUI.Text("ExplanationTitle", feedbackGroup.transform, "Explanation", 34, FontStyles.Bold, -395, 55, TextAlignmentOptions.Left, 70);
-        FloodLearningUI.Text("Explanation", feedbackGroup.transform, "Floodwater movement is strongly influenced by terrain connectivity and elevation. A longer but continuously low-lying corridor can provide a more plausible route than a shorter route that requires water to cross substantially higher terrain. Straight-line distance alone is therefore not sufficient for identifying the dominant flood pathway.", 29, FontStyles.Normal, -465, 260, TextAlignmentOptions.TopLeft, 70);
+        FloodLearningUI.Text("Explanation", feedbackGroup.transform, explanation, 29, FontStyles.Normal, -465, 260, TextAlignmentOptions.TopLeft, 70);
         if (confidenceCompleted != null)
             FloodLearningUI.Button("Continue", feedbackGroup.transform, "Continue", -785, 82, 29, ContinueAfterFeedback, 360);
     }
@@ -148,9 +176,9 @@ public sealed class FloodScenarioQuizPanel : MonoBehaviour
         confidenceGroup.SetActive(false);
         feedbackGroup.SetActive(true);
         TMP_Text result = feedbackGroup.transform.Find("Result").GetComponent<TMP_Text>();
-        result.text = selectedAnswer == 1 ? $"Correct!  |  Confidence: {confidence}%" : $"Your answer: {(char)('A' + selectedAnswer)}  |  Confidence: {confidence}%";
-        result.color = selectedAnswer == 1 ? new Color(.4f, 1, .55f) : new Color(1, .68f, .35f);
-        Debug.Log($"A1-P1 result: answer={(char)('A' + selectedAnswer)}, correct={selectedAnswer == 1}, confidence={confidence}");
+        result.text = selectedAnswer == CorrectAnswerIndex ? $"Correct!  |  Confidence: {confidence}%" : $"Your answer: {(char)('A' + selectedAnswer)}  |  Confidence: {confidence}%";
+        result.color = selectedAnswer == CorrectAnswerIndex ? new Color(.4f, 1, .55f) : new Color(1, .68f, .35f);
+        Debug.Log($"{SessionPrefix}-P1 result: answer={(char)('A' + selectedAnswer)}, correct={selectedAnswer == CorrectAnswerIndex}, confidence={confidence}");
     }
 
     void ContinueAfterFeedback()

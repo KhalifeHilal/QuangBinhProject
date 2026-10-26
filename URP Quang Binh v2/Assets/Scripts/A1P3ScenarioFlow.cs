@@ -380,13 +380,23 @@ public sealed class DelayedBypassAnimation : MonoBehaviour
 
 static class P3Panel
 {
-    static readonly string[] Answers =
+    static readonly string[] AnswersA =
     {
         "A) Water travelled around the western barrier end.",
         "B) Pressure behind the barrier produced new floodwater.",
         "C) An intact barrier inevitably causes delayed flooding.",
         "D) The barrier stood too far from the settlement."
     };
+    static readonly string[] AnswersB =
+    {
+        "A) The barrier failed in the middle.",
+        "B) Pressure behind it created new water.",
+        "C) The western endpoint stayed open, so water went around.",
+        "D) The barrier was too far away."
+    };
+    static bool UseB => ParticipantSession.IsCheckedIn && ParticipantSession.QuestionSet == ParticipantQuestionSet.B;
+    static string[] CurrentAnswers => UseB ? AnswersB : AnswersA;
+    static int CorrectAnswerIndex => UseB ? 2 : 0;
 
     public static GameObject CreateStartPrompt()
     {
@@ -411,13 +421,17 @@ static class P3Panel
     {
         FloodAudio.PlayQuestion();
         GameObject root = P2Panel.CanvasRoot("Quiz_A1_P3", new Vector2(1550, 1120));
-        FloodLearningUI.Text("Title", root.transform, "A1 - P3  |  Barrier Continuity & Bypassing", 44, FontStyles.Bold, -28, 62, TextAlignmentOptions.Left, 55);
+        string prefix = UseB ? "B1" : "A1";
+        string question = UseB
+            ? "What most likely allowed the water to reach the settlement?"
+            : "Why did floodwater reach the settlement despite the intact barrier?";
+        FloodLearningUI.Text("Title", root.transform, prefix + " - P3  |  Barrier Continuity & Bypassing", 44, FontStyles.Bold, -28, 62, TextAlignmentOptions.Left, 55);
         FloodLearningUI.Text("Scenario", root.transform, "A barrier substantially reduces direct flow toward a settlement. Several minutes later, however, water enters the protected area from around its western end. The barrier itself has not overtopped or failed.", 28, FontStyles.Normal, -105, 105, TextAlignmentOptions.TopLeft, 55);
-        FloodLearningUI.Text("Question", root.transform, "Why did floodwater reach the settlement despite the intact barrier?", 34, FontStyles.Bold, -220, 65, TextAlignmentOptions.TopLeft, 55);
-        for (int i = 0; i < Answers.Length; i++)
+        FloodLearningUI.Text("Question", root.transform, question, 34, FontStyles.Bold, -220, 65, TextAlignmentOptions.TopLeft, 55);
+        for (int i = 0; i < CurrentAnswers.Length; i++)
         {
             int n = i;
-            FloodLearningUI.Button("Answer_" + (char)('A' + i), root.transform, Answers[i], -300 - i * 135, 112, 26, () => { UnityEngine.Object.Destroy(root); answer(n); }, 1440);
+            FloodLearningUI.Button("Answer_" + (char)('A' + i), root.transform, CurrentAnswers[i], -300 - i * 135, 112, 26, () => { UnityEngine.Object.Destroy(root); answer(n); }, 1440);
         }
         FloodLearningUI.Button("Repeat", root.transform, "Repeat scenario", -865, 82, 29, () => { UnityEngine.Object.Destroy(root); repeat(); }, 390);
         FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.25f);
@@ -447,13 +461,20 @@ static class P3Panel
     static void ShowFeedback(GameObject root, int answer, int confidence, Action onCompleted)
     {
         foreach (Transform child in root.transform) UnityEngine.Object.Destroy(child.gameObject);
-        TMP_Text result = FloodLearningUI.Text("Result", root.transform, answer == 0 ? $"Correct!  |  Confidence: {confidence}%" : $"Your answer: {(char)('A' + answer)}  |  Confidence: {confidence}%", 39, FontStyles.Bold, -105, 62, TextAlignmentOptions.Center, 65);
-        result.color = answer == 0 ? new Color(.4f, 1f, .55f) : new Color(1f, .68f, .35f);
-        FloodLearningUI.Text("Correct", root.transform, "Correct answer: A) Water travelled around the western barrier end.", 31, FontStyles.Bold, -205, 145, TextAlignmentOptions.TopLeft, 70).color = new Color(.4f, 1f, .55f);
+        string prefix = UseB ? "B1" : "A1";
+        string correctText = UseB
+            ? "Correct answer: C) The western endpoint stayed open, so water went around."
+            : "Correct answer: A) Water travelled around the western barrier end.";
+        string explanation = UseB
+            ? "An intact barrier can still be ineffective if water can move around one of its endpoints. Protection depends on a continuous boundary."
+            : "A barrier can remain structurally intact and still fail as a protective intervention if water can move around one of its endpoints. The relevant issue is continuity of the protective boundary, not simply whether the central section remains intact.";
+        TMP_Text result = FloodLearningUI.Text("Result", root.transform, answer == CorrectAnswerIndex ? $"Correct!  |  Confidence: {confidence}%" : $"Your answer: {(char)('A' + answer)}  |  Confidence: {confidence}%", 39, FontStyles.Bold, -105, 62, TextAlignmentOptions.Center, 65);
+        result.color = answer == CorrectAnswerIndex ? new Color(.4f, 1f, .55f) : new Color(1f, .68f, .35f);
+        FloodLearningUI.Text("Correct", root.transform, correctText, 31, FontStyles.Bold, -205, 145, TextAlignmentOptions.TopLeft, 70).color = new Color(.4f, 1f, .55f);
         FloodLearningUI.Text("ExplanationTitle", root.transform, "Explanation", 34, FontStyles.Bold, -390, 55, TextAlignmentOptions.Left, 70);
-        FloodLearningUI.Text("Explanation", root.transform, "A barrier can remain structurally intact and still fail as a protective intervention if water can move around one of its endpoints. The relevant issue is continuity of the protective boundary, not simply whether the central section remains intact.", 29, FontStyles.Normal, -460, 230, TextAlignmentOptions.TopLeft, 70);
+        FloodLearningUI.Text("Explanation", root.transform, explanation, 29, FontStyles.Normal, -460, 230, TextAlignmentOptions.TopLeft, 70);
         if (onCompleted != null)
             FloodLearningUI.Button("Continue", root.transform, "Continue", -775, 82, 29, () => { UnityEngine.Object.Destroy(root); onCompleted(); }, 360);
-        Debug.Log($"A1-P3 result: answer={(char)('A' + answer)}, correct={answer == 0}, confidence={confidence}");
+        Debug.Log($"{prefix}-P3 result: answer={(char)('A' + answer)}, correct={answer == CorrectAnswerIndex}, confidence={confidence}");
     }
 }

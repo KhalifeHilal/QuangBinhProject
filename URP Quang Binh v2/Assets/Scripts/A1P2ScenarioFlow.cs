@@ -222,13 +222,23 @@ public sealed class FloodBarrierScenarioA1P2 : MonoBehaviour
 
 static class P2Panel
 {
-    static readonly string[] Answers =
+    static readonly string[] AnswersA =
     {
         "A) The shorter path should be prioritized because water reaches it first.",
         "B) The barrier closer to buildings is more effective regardless of topography.",
         "C) Both alignments are equally effective because the barriers have equal length.",
         "D) The surrounding high terrain can function as part of the continuous boundary that limits possible routes around the barrier."
     };
+    static readonly string[] AnswersB =
+    {
+        "A) It is farther away, so the water slows down.",
+        "B) It joins high terrain and closes routes around the ends.",
+        "C) It needs less material because it is closer.",
+        "D) Both work equally because they are the same length."
+    };
+    static bool UseB => ParticipantSession.IsCheckedIn && ParticipantSession.QuestionSet == ParticipantQuestionSet.B;
+    static string[] CurrentAnswers => UseB ? AnswersB : AnswersA;
+    static int CorrectAnswerIndex => UseB ? 1 : 3;
 
     public static GameObject CreateStartPrompt()
     {
@@ -255,9 +265,13 @@ static class P2Panel
     {
         FloodAudio.PlayQuestion();
         GameObject root = CanvasRoot("Quiz_A1_P2", new Vector2(1450, 1020));
-        FloodLearningUI.Text("Title", root.transform, "A1 - P2  |  Topography", 44, FontStyles.Bold, -28, 62, TextAlignmentOptions.Left, 55);
-        FloodLearningUI.Text("Question", root.transform, "Which barrier alignment should receive greater attention when planning flood protection?", 33, FontStyles.Bold, -110, 95, TextAlignmentOptions.TopLeft, 55);
-        for (int i = 0; i < 4; i++) { int n = i; FloodLearningUI.Button("Answer_" + i, root.transform, Answers[i], -225 - i * 125, 102, 27, () => { UnityEngine.Object.Destroy(root); answer(n); }); }
+        string prefix = UseB ? "B1" : "A1";
+        string question = UseB
+            ? "Why is Alignment A the stronger option?"
+            : "Which barrier alignment should receive greater attention when planning flood protection?";
+        FloodLearningUI.Text("Title", root.transform, prefix + " - P2  |  Topography", 44, FontStyles.Bold, -28, 62, TextAlignmentOptions.Left, 55);
+        FloodLearningUI.Text("Question", root.transform, question, 33, FontStyles.Bold, -110, 95, TextAlignmentOptions.TopLeft, 55);
+        for (int i = 0; i < CurrentAnswers.Length; i++) { int n = i; FloodLearningUI.Button("Answer_" + i, root.transform, CurrentAnswers[i], -225 - i * 125, 102, 27, () => { UnityEngine.Object.Destroy(root); answer(n); }); }
         FloodLearningUI.Button("Repeat", root.transform, "Repeat scenario", -840, 82, 29, () => { UnityEngine.Object.Destroy(root); repeat(); }, 390);
         FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.25f);
     }
@@ -283,12 +297,19 @@ static class P2Panel
     static void ShowFeedback(GameObject root, int answer, int confidence, Action onCompleted)
     {
         foreach (Transform child in root.transform) UnityEngine.Object.Destroy(child.gameObject);
-        TMP_Text result = FloodLearningUI.Text("Result", root.transform, answer == 3 ? $"Correct!  |  Confidence: {confidence}%" : $"Your answer: {(char)('A' + answer)}  |  Confidence: {confidence}%", 39, FontStyles.Bold, -120, 62, TextAlignmentOptions.Center, 65); result.color = answer == 3 ? new Color(.4f, 1f, .55f) : new Color(1f, .68f, .35f);
-        FloodLearningUI.Text("Correct", root.transform, "Correct answer: D) The surrounding high terrain can function as part of the continuous boundary that limits possible routes around the barrier.", 31, FontStyles.Bold, -220, 150, TextAlignmentOptions.TopLeft, 70).color = new Color(.4f, 1f, .55f);
+        string prefix = UseB ? "B1" : "A1";
+        string correctText = UseB
+            ? "Correct answer: B) It joins high terrain and closes routes around the ends."
+            : "Correct answer: D) The surrounding high terrain can function as part of the continuous boundary that limits possible routes around the barrier.";
+        string explanation = UseB
+            ? "High terrain at the endpoints can extend the protective boundary and reduce the routes available for water to move around the barrier."
+            : "A barrier is more effective when its endpoints connect to terrain that restricts lateral flow. Existing high ground can extend the effective protective boundary beyond the constructed barrier itself and reduce opportunities for water to bypass it.";
+        TMP_Text result = FloodLearningUI.Text("Result", root.transform, answer == CorrectAnswerIndex ? $"Correct!  |  Confidence: {confidence}%" : $"Your answer: {(char)('A' + answer)}  |  Confidence: {confidence}%", 39, FontStyles.Bold, -120, 62, TextAlignmentOptions.Center, 65); result.color = answer == CorrectAnswerIndex ? new Color(.4f, 1f, .55f) : new Color(1f, .68f, .35f);
+        FloodLearningUI.Text("Correct", root.transform, correctText, 31, FontStyles.Bold, -220, 150, TextAlignmentOptions.TopLeft, 70).color = new Color(.4f, 1f, .55f);
         FloodLearningUI.Text("ExplanationTitle", root.transform, "Explanation", 34, FontStyles.Bold, -410, 55, TextAlignmentOptions.Left, 70);
-        FloodLearningUI.Text("Explanation", root.transform, "A barrier is more effective when its endpoints connect to terrain that restricts lateral flow. Existing high ground can extend the effective protective boundary beyond the constructed barrier itself and reduce opportunities for water to bypass it.", 29, FontStyles.Normal, -480, 240, TextAlignmentOptions.TopLeft, 70);
+        FloodLearningUI.Text("Explanation", root.transform, explanation, 29, FontStyles.Normal, -480, 240, TextAlignmentOptions.TopLeft, 70);
         FloodLearningUI.Button("Continue", root.transform, "Continue", -785, 82, 29, () => { UnityEngine.Object.Destroy(root); onCompleted?.Invoke(); }, 360);
-        Debug.Log($"A1-P2 result: answer={(char)('A' + answer)}, correct={answer == 3}, confidence={confidence}");
+        Debug.Log($"{prefix}-P2 result: answer={(char)('A' + answer)}, correct={answer == CorrectAnswerIndex}, confidence={confidence}");
     }
     public static GameObject CanvasRoot(string name, Vector2 size, float scale = .0015f)
     {

@@ -303,13 +303,23 @@ public sealed class A1P6ScenarioFlow : MonoBehaviour
 
 static class A1P6Panel
 {
-    static readonly string[] Answers =
+    static readonly string[] AnswersA =
     {
         "A) Protecting one area removes the need to examine the rest of the system.",
         "B) Higher upstream water always means that the barrier has failed.",
         "C) A barrier can reduce flooding locally while increasing flood risk elsewhere.",
         "D) Flood barriers only affect the exact area where they are built."
     };
+    static readonly string[] AnswersB =
+    {
+        "A) A barrier may protect one area but raise risk elsewhere.",
+        "B) An upstream rise always means the barrier failed.",
+        "C) Other areas do not matter after the target is protected.",
+        "D) A barrier affects only the place where it is built."
+    };
+    static bool UseB => ParticipantSession.IsCheckedIn && ParticipantSession.QuestionSet == ParticipantQuestionSet.B;
+    static string[] CurrentAnswers => UseB ? AnswersB : AnswersA;
+    static int CorrectAnswerIndex => UseB ? 0 : 2;
 
     public static GameObject CreateStartPrompt()
     {
@@ -334,15 +344,19 @@ static class A1P6Panel
     {
         FloodAudio.PlayQuestion();
         GameObject root = P2Panel.CanvasRoot("Quiz_A1_P6", new Vector2(1600, 1180));
-        FloodLearningUI.Text("Title", root.transform, "A1 - P6  |  System-Level Consequences", 44, FontStyles.Bold, -28, 62, TextAlignmentOptions.Left, 55);
+        string prefix = UseB ? "B1" : "A1";
+        string question = UseB
+            ? "What should be considered when judging this protection measure?"
+            : "What does this show about flood protection?";
+        FloodLearningUI.Text("Title", root.transform, prefix + " - P6  |  System-Level Consequences", 44, FontStyles.Bold, -28, 62, TextAlignmentOptions.Left, 55);
         FloodLearningUI.Text("Scenario", root.transform,
             "You may build a maximum of two flood barriers. A barrier reduces flooding in one area, but water depth increases upstream and more water begins to flow toward another populated area.",
             28, FontStyles.Normal, -105, 170, TextAlignmentOptions.TopLeft, 55);
-        FloodLearningUI.Text("Question", root.transform, "What does this show about flood protection?", 34, FontStyles.Bold, -305, 65, TextAlignmentOptions.TopLeft, 55);
-        for (int i = 0; i < Answers.Length; i++)
+        FloodLearningUI.Text("Question", root.transform, question, 34, FontStyles.Bold, -305, 65, TextAlignmentOptions.TopLeft, 55);
+        for (int i = 0; i < CurrentAnswers.Length; i++)
         {
             int n = i;
-            FloodLearningUI.Button("Answer_" + (char)('A' + i), root.transform, Answers[i], -385 - i * 135, 112, 24,
+            FloodLearningUI.Button("Answer_" + (char)('A' + i), root.transform, CurrentAnswers[i], -385 - i * 135, 112, 24,
                 () => { UnityEngine.Object.Destroy(root); answer(n); }, 1500);
         }
         FloodLearningUI.Button("Repeat", root.transform, "Repeat scenario", -965, 82, 29,
@@ -378,19 +392,26 @@ static class A1P6Panel
     static void ShowFeedback(GameObject root, int answer, int confidence, Action onCompleted)
     {
         foreach (Transform child in root.transform) UnityEngine.Object.Destroy(child.gameObject);
+        string prefix = UseB ? "B1" : "A1";
+        string correctText = UseB
+            ? "Correct answer: A) A barrier may protect one area but raise risk elsewhere."
+            : "Correct answer: C) A barrier can reduce flooding locally while increasing flood risk elsewhere.";
+        string explanation = UseB
+            ? "Flood protection must be evaluated for the whole system. A barrier can change water storage and redirect risk to another area."
+            : "Flood protection can change water storage and flow pathways. A barrier may protect one location but redirect or accumulate water in other areas.\n\nTherefore, the consequences for the whole system must be considered; not only the protected area.";
         TMP_Text result = FloodLearningUI.Text("Result", root.transform,
-            answer == 2 ? $"Correct!  |  Confidence: {confidence}%" : $"Your answer: {(char)('A' + answer)}  |  Confidence: {confidence}%",
+            answer == CorrectAnswerIndex ? $"Correct!  |  Confidence: {confidence}%" : $"Your answer: {(char)('A' + answer)}  |  Confidence: {confidence}%",
             39, FontStyles.Bold, -105, 62, TextAlignmentOptions.Center, 65);
-        result.color = answer == 2 ? new Color(.4f, 1f, .55f) : new Color(1f, .68f, .35f);
+        result.color = answer == CorrectAnswerIndex ? new Color(.4f, 1f, .55f) : new Color(1f, .68f, .35f);
         FloodLearningUI.Text("Correct", root.transform,
-            "Correct answer: C) A barrier can reduce flooding locally while increasing flood risk elsewhere.",
+            correctText,
             30, FontStyles.Bold, -205, 145, TextAlignmentOptions.TopLeft, 70).color = new Color(.4f, 1f, .55f);
         FloodLearningUI.Text("ExplanationTitle", root.transform, "Explanation", 34, FontStyles.Bold, -415, 55, TextAlignmentOptions.Left, 70);
         FloodLearningUI.Text("Explanation", root.transform,
-            "Flood protection can change water storage and flow pathways. A barrier may protect one location but redirect or accumulate water in other areas.\n\nTherefore, the consequences for the whole system must be considered; not only the protected area.",
+            explanation,
             29, FontStyles.Normal, -445, 280, TextAlignmentOptions.TopLeft, 70);
         FloodLearningUI.Button("Finish", root.transform, "Finish", -780, 82, 29,
             () => { UnityEngine.Object.Destroy(root); onCompleted?.Invoke(); }, 360);
-        Debug.Log($"A1-P6 result: answer={(char)('A' + answer)}, correct={answer == 2}, confidence={confidence}");
+        Debug.Log($"{prefix}-P6 result: answer={(char)('A' + answer)}, correct={answer == CorrectAnswerIndex}, confidence={confidence}");
     }
 }
