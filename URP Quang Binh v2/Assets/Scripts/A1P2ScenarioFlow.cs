@@ -267,7 +267,7 @@ static class P2Panel
         GameObject root = CanvasRoot("Quiz_A1_P2", new Vector2(1450, 1020));
         string prefix = UseB ? "B1" : "A1";
         string question = UseB
-            ? "Why is Alignment A the stronger option?"
+            ? "Why is Alignment B the stronger option?"
             : "Which barrier alignment should receive greater attention when planning flood protection?";
         FloodLearningUI.Text("Title", root.transform, prefix + " - P2  |  Topography", 44, FontStyles.Bold, -28, 62, TextAlignmentOptions.Left, 55);
         FloodLearningUI.Text("Question", root.transform, question, 33, FontStyles.Bold, -110, 95, TextAlignmentOptions.TopLeft, 55);
