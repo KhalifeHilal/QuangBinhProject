@@ -25,6 +25,8 @@ public class DykeManagerTutorial : MonoBehaviour
     [Header("Terrain fitting")]
     [Tooltip("Minimum burial depth for the lowest points/feet of a constructed dyke.")]
     [Min(0f)] [SerializeField] float footEmbedDepth = 0.03f;
+    [Tooltip("Snap a free-placement dyke endpoint to the terrain edge when it is this close (metres).")]
+    [Min(0f)] [SerializeField] float terrainEdgeSnapDistanceMeters = 0.10f;
     [SerializeField] GameObject dykeToDestroy;
 
     [Header("Scenario placement")]
@@ -267,7 +269,9 @@ public class DykeManagerTutorial : MonoBehaviour
                     if (freePlacement || snapPoints.Contains(raycastHit.collider))
                     {
                         startCollider = raycastHit.collider;
-                        startPoint = freePlacement ? raycastHit.point : startCollider.transform.position;
+                        startPoint = freePlacement
+                            ? SnapToTerrainEdge(raycastHit.point)
+                            : startCollider.transform.position;
                         displayFutureDike = true;
                     }
                 }
@@ -293,7 +297,9 @@ public class DykeManagerTutorial : MonoBehaviour
                         (!freePlacement && snapPoints.Contains(raycastHit.collider) && raycastHit.collider != startCollider);
                     if (validEndPoint)
                     {
-                        endPoint = freePlacement ? raycastHit.point : raycastHit.collider.transform.position;
+                        endPoint = freePlacement
+                            ? SnapToTerrainEdge(raycastHit.point)
+                            : raycastHit.collider.transform.position;
                         if (Vector3.Distance(startPoint, endPoint) > 0.05f) DrawNewDyke();
                     }
                 }
@@ -316,7 +322,7 @@ public class DykeManagerTutorial : MonoBehaviour
             }
 
             Vector2[] pts = new Vector2[5];
-            Vector3 _endPoint = raycastHit.point;
+            Vector3 _endPoint = SnapToTerrainEdge(raycastHit.point);
             float horizontalDistance = HorizontalDistance(startPoint, _endPoint);
             EnsureFutureLengthLabel();
             futureLengthLabel.SetPreview(startPoint, _endPoint, horizontalDistance);
@@ -409,6 +415,53 @@ public class DykeManagerTutorial : MonoBehaviour
         Vector3 delta = end - start;
         delta.y = 0f;
         return delta.magnitude;
+    }
+
+    Vector3 SnapToTerrainEdge(Vector3 point)
+    {
+        if (!freePlacement || terrainEdgeSnapDistanceMeters <= 0f || placementTerrainRenderer == null)
+            return point;
+
+        Bounds bounds = placementTerrainRenderer.bounds;
+        float threshold = terrainEdgeSnapDistanceMeters;
+        bool snapped = false;
+
+        bool insideX = point.x >= bounds.min.x - threshold && point.x <= bounds.max.x + threshold;
+        bool insideZ = point.z >= bounds.min.z - threshold && point.z <= bounds.max.z + threshold;
+        if (insideZ && Mathf.Abs(point.x - bounds.min.x) <= threshold)
+        {
+            point.x = bounds.min.x;
+            snapped = true;
+        }
+        else if (insideZ && Mathf.Abs(point.x - bounds.max.x) <= threshold)
+        {
+            point.x = bounds.max.x;
+            snapped = true;
+        }
+
+        if (insideX && Mathf.Abs(point.z - bounds.min.z) <= threshold)
+        {
+            point.z = bounds.min.z;
+            snapped = true;
+        }
+        else if (insideX && Mathf.Abs(point.z - bounds.max.z) <= threshold)
+        {
+            point.z = bounds.max.z;
+            snapped = true;
+        }
+
+        if (!snapped) return point;
+
+        // The edge can have a different elevation from the original hit. Use
+        // a fresh terrain raycast so the dyke follows the actual terrain edge.
+        float rayStartY = bounds.max.y + Mathf.Max(2f, bounds.size.y + 1f);
+        float rayDistance = Mathf.Max(10f, bounds.size.y + 20f);
+        Ray edgeRay = new Ray(new Vector3(point.x, rayStartY, point.z), Vector3.down);
+        if (Physics.Raycast(edgeRay, out RaycastHit edgeHit, rayDistance, ~0,
+            QueryTriggerInteraction.Ignore) && IsTerrainHit(edgeHit))
+            point.y = edgeHit.point.y;
+
+        return point;
     }
 
     void EnsureFutureLengthLabel()
