@@ -38,7 +38,6 @@ public sealed class GamepadDykeBuilder : MonoBehaviour
     GameObject visualRoot;
     GameObject cursorMarker;
     GameObject startMarker;
-    LineRenderer arrowLine;
     LineRenderer previewLine;
     Material visualMaterial;
     Renderer cursorRenderer;
@@ -190,7 +189,7 @@ public sealed class GamepadDykeBuilder : MonoBehaviour
         cursorMarker = GameObject.CreatePrimitive(PrimitiveType.Sphere);
         cursorMarker.name = "TerrainCursor";
         cursorMarker.transform.SetParent(visualRoot.transform, true);
-        cursorMarker.transform.localScale = Vector3.one * .14f;
+        cursorMarker.transform.localScale = Vector3.one * .18f;
         Collider cursorCollider = cursorMarker.GetComponent<Collider>();
         if (cursorCollider != null) cursorCollider.enabled = false;
 
@@ -208,7 +207,6 @@ public sealed class GamepadDykeBuilder : MonoBehaviour
         cursorRenderer.material = visualMaterial;
         startRenderer.material = visualMaterial;
 
-        arrowLine = CreateLine("TerrainCursorArrow", .035f);
         previewLine = CreateLine("DykePreview", .06f);
         previewLine.gameObject.SetActive(false);
     }
@@ -260,12 +258,6 @@ public sealed class GamepadDykeBuilder : MonoBehaviour
         }
         // Keep the cursor stable while the stick is idle; there is no reason
         // to raycast the terrain again every frame.
-
-        // In the PlayMaker tutorial, keep the free terrain cursor but gently
-        // snap it to an authored point when the participant reaches one.
-        if (IsPlayMakerTutorialActive() && manager != null &&
-            manager.TryGetTutorialSnapPoint(cursorPosition, tutorialSnapRadius, out Vector3 snap))
-            cursorPosition = snap;
 
         return (cursorPosition - before).sqrMagnitude > .000001f;
     }
@@ -343,22 +335,6 @@ public sealed class GamepadDykeBuilder : MonoBehaviour
         Vector3 up = Vector3.up * cursorHeight;
         cursorMarker.transform.position = cursorPosition + up;
 
-        Camera camera = Camera.main;
-        Vector3 direction = camera != null ? camera.transform.forward : Vector3.forward;
-        direction.y = 0f;
-        if (hasStart && (cursorPosition - startPosition).sqrMagnitude > .001f)
-            direction = cursorPosition - startPosition;
-        if (direction.sqrMagnitude < .001f) direction = Vector3.forward;
-        direction.Normalize();
-        Vector3 side = Vector3.Cross(Vector3.up, direction).normalized;
-        Vector3 tip = cursorPosition + up + direction * .34f;
-        Vector3 tail = cursorPosition + up - direction * .27f;
-        arrowLine.SetPosition(0, tail);
-        arrowLine.SetPosition(1, tip);
-        arrowLine.SetPosition(2, tip - direction * .14f - side * .12f);
-        arrowLine.SetPosition(3, tip);
-        arrowLine.SetPosition(4, tip - direction * .14f + side * .12f);
-
         startMarker.SetActive(hasStart);
         if (startRenderer != null) startRenderer.enabled = hasStart;
         if (hasStart)
@@ -394,11 +370,6 @@ public sealed class GamepadDykeBuilder : MonoBehaviour
     void SetVisualColor(Color color)
     {
         if (visualMaterial != null) visualMaterial.color = color;
-        if (arrowLine != null)
-        {
-            arrowLine.startColor = color;
-            arrowLine.endColor = color;
-        }
         if (previewLine != null)
         {
             previewLine.startColor = color;
@@ -411,7 +382,6 @@ public sealed class GamepadDykeBuilder : MonoBehaviour
         if (visualRoot != null) visualRoot.SetActive(true);
         if (cursorRenderer != null) cursorRenderer.enabled = visible;
         if (startRenderer != null) startRenderer.enabled = visible && hasStart;
-        if (arrowLine != null) arrowLine.enabled = visible;
         if (previewLine != null && !visible) previewLine.gameObject.SetActive(false);
     }
 
