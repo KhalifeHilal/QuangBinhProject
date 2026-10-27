@@ -85,6 +85,12 @@ public sealed class GamepadInteractionController : MonoBehaviour
             GamepadUIInput.SubmitTutorialStart(EventSystem.current);
     }
 
+    void LateUpdate()
+    {
+        if (gamepadModeActive)
+            GamepadUIInput.RefreshTutorialInstructions();
+    }
+
     void EnableGamepadMode()
     {
         ParticipantInput.SetGamepadModeEnabled(true);

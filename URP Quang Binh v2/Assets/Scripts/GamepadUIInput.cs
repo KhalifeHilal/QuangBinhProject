@@ -19,17 +19,31 @@ public static class GamepadUIInput
     static Selectable selected;
     static Canvas selectedCanvas;
     static float nextMoveTime;
+    static float nextTutorialInstructionRefreshTime;
 
-    // These two hints are authored in Tutorial_Scene as TextMeshPro labels.
-    // They are updated once when the participant switches to the Gamepad
-    // condition, so the tutorial still uses its original wording for the
-    // Quest-controller conditions without adding another per-frame scan.
-    static bool tutorialInstructionsUpdated;
+    enum TutorialInstructionKind
+    {
+        Move,
+        Start,
+        DestroyDyke,
+        BuildDyke
+    }
+
+    // Cache the actual scene labels once. The cached labels are reapplied in
+    // LateUpdate while Gamepad mode is active because PlayMaker can restore
+    // the authored text when a tutorial panel enters its state.
+    static readonly Dictionary<TMP_Text, TutorialInstructionKind> tutorialInstructionLabels =
+        new Dictionary<TMP_Text, TutorialInstructionKind>();
+    static bool tutorialInstructionsSearched;
 
     public static void Tick()
     {
         if (!ParticipantInput.IsGamepadParticipant)
             return;
+
+        // Apply before UI navigation as well; the controller's LateUpdate
+        // call below catches text that PlayMaker changes during this frame.
+        RefreshTutorialInstructions();
 
         EventSystem eventSystem = EventSystem.current;
         if (eventSystem == null)
@@ -47,34 +61,104 @@ public static class GamepadUIInput
     }
 
     /// <summary>
-    /// Applies the Gamepad-specific wording to the two existing tutorial
-    /// instruction labels. The labels may be inactive while the check-in
-    /// panel is shown, therefore inactive objects are included in the search.
+    /// Applies the Gamepad-specific wording to the tutorial instruction
+    /// labels. The labels may be inactive while the check-in panel is shown,
+    /// therefore inactive objects are included in the initial search.
     /// </summary>
     public static void RefreshTutorialInstructions()
     {
-        if (tutorialInstructionsUpdated || !ParticipantInput.IsGamepadParticipant)
+        if (!ParticipantInput.IsGamepadParticipant)
             return;
 
-        TMP_Text[] labels = UnityEngine.Object.FindObjectsByType<TMP_Text>(
-            FindObjectsInactive.Include, FindObjectsSortMode.None);
-        foreach (TMP_Text label in labels)
+        if (!tutorialInstructionsSearched)
         {
-            if (label == null)
-                continue;
+            if (Time.unscaledTime < nextTutorialInstructionRefreshTime)
+                return;
 
-            string text = label.text == null ? string.Empty : label.text.Trim();
-            if (string.Equals(text, "Use the right Joystick to move", StringComparison.OrdinalIgnoreCase))
+            // Resources.FindObjectsOfTypeAll also sees TextMeshPro labels below
+            // inactive PlayMaker panels. Filter out prefab assets so only scene
+            // objects are changed.
+            TMP_Text[] labels = Resources.FindObjectsOfTypeAll<TMP_Text>();
+            foreach (TMP_Text label in labels)
             {
-                label.text = "Use left stick to move";
+                if (label == null || !label.gameObject.scene.IsValid())
+                    continue;
+
+                if (TryGetTutorialInstructionKind(label.text, out TutorialInstructionKind kind))
+                    tutorialInstructionLabels[label] = kind;
             }
-            else if (string.Equals(text, "Use the right trigger button to interact with interface", StringComparison.OrdinalIgnoreCase))
+
+            tutorialInstructionsSearched = tutorialInstructionLabels.Count > 0;
+            if (!tutorialInstructionsSearched)
             {
-                label.text = "Press B to start";
+                nextTutorialInstructionRefreshTime = Time.unscaledTime + .25f;
+                return;
             }
         }
 
-        tutorialInstructionsUpdated = true;
+        foreach (KeyValuePair<TMP_Text, TutorialInstructionKind> entry in tutorialInstructionLabels)
+        {
+            if (entry.Key != null)
+                ApplyTutorialInstruction(entry.Key, entry.Value);
+        }
+    }
+
+    static bool TryGetTutorialInstructionKind(string value, out TutorialInstructionKind kind)
+    {
+        string text = value == null ? string.Empty : value.Trim();
+        if (string.Equals(text, "Use the right Joystick to move", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(text, "Use left stick to move", StringComparison.OrdinalIgnoreCase))
+        {
+            kind = TutorialInstructionKind.Move;
+            return true;
+        }
+
+        if (string.Equals(text, "Use the right trigger button to interact with interface", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(text, "Press B to start", StringComparison.OrdinalIgnoreCase))
+        {
+            kind = TutorialInstructionKind.Start;
+            return true;
+        }
+
+        if (text.IndexOf("button to destroy a dyke", StringComparison.OrdinalIgnoreCase) >= 0 ||
+            text.IndexOf("Hold right Grip over the dyke", StringComparison.OrdinalIgnoreCase) >= 0)
+        {
+            kind = TutorialInstructionKind.DestroyDyke;
+            return true;
+        }
+
+        if ((text.IndexOf("building a dyke", StringComparison.OrdinalIgnoreCase) >= 0 &&
+             text.IndexOf("right trigger button", StringComparison.OrdinalIgnoreCase) >= 0) ||
+            text.IndexOf("Hold right Grip to show the cursor", StringComparison.OrdinalIgnoreCase) >= 0)
+        {
+            kind = TutorialInstructionKind.BuildDyke;
+            return true;
+        }
+
+        kind = default;
+        return false;
+    }
+
+    static void ApplyTutorialInstruction(TMP_Text label, TutorialInstructionKind kind)
+    {
+        switch (kind)
+        {
+            case TutorialInstructionKind.Move:
+                label.text = "Use left stick to move";
+                break;
+            case TutorialInstructionKind.Start:
+                label.text = "Press B to start";
+                break;
+            case TutorialInstructionKind.DestroyDyke:
+                label.text = "This dyke is not protecting the city effectively.\n\n" +
+                    "Hold right Grip over the dyke and press A to destroy it.";
+                break;
+            case TutorialInstructionKind.BuildDyke:
+                label.text = "Nice! We need to build new dykes.\n" +
+                    "Hold right Grip to show the cursor and move it with the right stick.\n" +
+                    "Press Trigger once for the start point and once for the end point.";
+                break;
+        }
     }
 
     /// <summary>
@@ -533,6 +617,8 @@ public static class GamepadUIInput
         selected = null;
         selectedCanvas = null;
         nextMoveTime = 0f;
-        tutorialInstructionsUpdated = false;
+        nextTutorialInstructionRefreshTime = 0f;
+        tutorialInstructionLabels.Clear();
+        tutorialInstructionsSearched = false;
     }
 }

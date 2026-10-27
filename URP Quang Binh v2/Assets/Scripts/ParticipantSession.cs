@@ -43,5 +43,11 @@ public static class ParticipantSession
         QuestionSet = questionSet;
         IsCheckedIn = true;
         Debug.Log($"Participant check-in: {Number:00}, set {QuestionSet}, question index {QuestionIndex}, interaction {InteractionMode}");
+
+        // Apply Gamepad-specific tutorial instructions immediately after the
+        // condition is selected. This runs before the tutorial panels are
+        // restored, so inactive TextMeshPro labels are included as well.
+        if (InteractionMode == ParticipantInteractionMode.Gamepad)
+            GamepadUIInput.RefreshTutorialInstructions();
     }
 }
