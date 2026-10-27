@@ -274,7 +274,7 @@ sealed class FloodScenarioContinuePrompt : MonoBehaviour
         RectTransform r = (RectTransform)root.transform; r.sizeDelta = new Vector2(1000, 330); r.localScale = Vector3.one * .0015f; FloodLearningUIStyle.ApplyPanel(root.AddComponent<Image>());
         FloodLearningUI.Text("Title", root.transform, "A1 - P1", 39, FontStyles.Bold, -35, 55, TextAlignmentOptions.Center, 45);
         FloodLearningUI.Text("Scenario", root.transform, "Flood simulation", 43, FontStyles.Bold, -105, 65, TextAlignmentOptions.Center, 45);
-        string startText = ParticipantInput.IsGamepadParticipant ? "Press B to start the simulation" : "Press A to start the simulation";
+        string startText = ParticipantInput.IsGamepadParticipant ? "Press Y to start the simulation" : "Press A to start the simulation";
         TMP_Text prompt = FloodLearningUI.Text("Prompt", root.transform, startText, 35, FontStyles.Normal, -210, 55, TextAlignmentOptions.Center, 45); prompt.color = new Color(.35f, .82f, 1);
         FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.1f); return root;
     }
@@ -285,7 +285,7 @@ sealed class FloodScenarioContinuePrompt : MonoBehaviour
         RectTransform r = (RectTransform)root.transform; r.sizeDelta = new Vector2(1050, 390); r.localScale = Vector3.one * .0015f; FloodLearningUIStyle.ApplyPanel(root.AddComponent<Image>());
         FloodLearningUI.Text("Title", root.transform, "A1 - P1  |  Build protection", 39, FontStyles.Bold, -35, 58, TextAlignmentOptions.Center, 45);
         TMP_Text prompt = FloodLearningUI.Text("Prompt", root.transform,
-            $"Build dykes for your answer anywhere on the terrain with the trigger.\nPoint at one and press Grip to destroy it. Press {(ParticipantInput.IsGamepadParticipant ? "B" : "A")} when you are finished.",
+            $"Build dykes for your answer anywhere on the terrain with the trigger.\nPoint at one and press Grip to destroy it. Press {(ParticipantInput.IsGamepadParticipant ? "Y" : "A")} when you are finished.",
             30, FontStyles.Bold, -135, 125, TextAlignmentOptions.Center, 55); prompt.color = new Color(.35f, .82f, 1);
         FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.1f); return root;
     }

@@ -63,7 +63,7 @@ public sealed class A1P4ScenarioFlow : MonoBehaviour
     void Update()
     {
         if (phase == Phase.WaitingForA && ParticipantInput.StartWasPressedThisFrame(questA)) StartPreview();
-        if (phase == Phase.BuildingDykes && ParticipantInput.StartWasPressedThisFrame(questA)) StartFlood();
+        if (phase == Phase.BuildingDykes && ParticipantInput.SimulationStartWasPressedThisFrame(questA)) StartFlood();
         if (phase != Phase.Preview && phase != Phase.Flood) return;
         elapsed += Time.deltaTime;
         if (phase == Phase.Preview && elapsed >= viewingDuration) ShowQuestion();
@@ -443,7 +443,7 @@ static class A1P4Panel
         GameObject root = P2Panel.CanvasRoot("A1_P4_Build", new Vector2(1100, 390));
         FloodLearningUI.Text("Title", root.transform, "A1 - P4  |  Build protection", 39, FontStyles.Bold, -35, 58, TextAlignmentOptions.Center, 45);
         string instructions = ParticipantInput.IsGamepadParticipant
-            ? "Build one dyke up to 3.5 m. Hold right Grip and move the terrain cursor with the right thumbstick.\nPress Trigger once for the start and once for the end.\nPress A on a dyke to remove it. Release Grip to cancel. Press B when finished."
+            ? "Build one dyke up to 3.5 m. Hold right Grip and move the terrain cursor with the right thumbstick.\nPress Trigger once for the start and once for the end.\nPress A on a dyke to remove it. Release Grip to cancel. Press Y when finished."
             : "Build one dyke up to 3.5 metres long anywhere on the terrain with the trigger.\nPoint at it and press Grip to destroy it. Press A when you are finished.";
         FloodLearningUI.Text("Prompt", root.transform, instructions, 30, FontStyles.Bold, -135, 135, TextAlignmentOptions.Center, 55).color = new Color(.35f, .82f, 1f);
         FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.1f);

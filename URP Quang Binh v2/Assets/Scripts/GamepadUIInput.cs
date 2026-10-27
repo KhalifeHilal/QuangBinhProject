@@ -1,4 +1,6 @@
 using TMPro;
+using System;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -48,6 +50,17 @@ public static class GamepadUIInput
         if (eventSystem == null)
             return;
 
+        // B is reserved for an actual tutorial/start prompt. Never search
+        // globally while an explanation, answer, confidence, or Continue UI
+        // is active; otherwise B can change the active flow and leave A's
+        // Continue action without a valid target.
+        if (IsUsable(selected) && !IsStartControl(selected))
+            return;
+        if (FindFirstQuestionControl() != null ||
+            FindFirstUsableSlider() != null ||
+            FindFirstUsableContinueButton() != null)
+            return;
+
         Button startButton = IsStartControl(selected) ? selected as Button : null;
         if (startButton == null)
         {
@@ -74,6 +87,65 @@ public static class GamepadUIInput
 
     static void EnsureSelected(EventSystem eventSystem)
     {
+        // Every question starts with answer A selected. If the previous
+        // question or confidence panel was destroyed, never keep a stale
+        // selection from that old canvas.
+        Selectable firstQuestionControl = FindFirstQuestionControl();
+        if (firstQuestionControl != null)
+        {
+            if (!IsUsable(selected) || !IsQuestionControl(selected) ||
+                CanvasFor(selected) != CanvasFor(firstQuestionControl))
+            {
+                Select(eventSystem, firstQuestionControl);
+            }
+            else if (eventSystem.currentSelectedGameObject != selected.gameObject)
+            {
+                Select(eventSystem, selected);
+            }
+            return;
+        }
+
+        // Unity's EventSystem can automatically select the Confirm button on
+        // a newly-created survey. Prefer the active slider explicitly so the
+        // first horizontal thumbstick movement changes its value. Once A has
+        // moved focus to Confirm, keep that button selected for submission.
+        Selectable firstSlider = FindFirstUsableSlider();
+        if (firstSlider != null)
+        {
+            bool selectedIsSlider = selected is Slider;
+            bool selectedIsConfirm = IsConfirmControl(selected) &&
+                                     CanvasFor(selected) == CanvasFor(firstSlider);
+            if (!IsUsable(selected) ||
+                (CanvasFor(selected) != CanvasFor(firstSlider) && !selectedIsConfirm) ||
+                (!selectedIsSlider && !selectedIsConfirm))
+            {
+                Select(eventSystem, firstSlider);
+            }
+            else if (selectedIsSlider && eventSystem.currentSelectedGameObject != selected.gameObject)
+            {
+                Select(eventSystem, selected);
+            }
+            return;
+        }
+
+        // Once a simulation/feedback screen is finished, its Continue button
+        // becomes interactable. Give it focus explicitly so the right A
+        // button can confirm it without requiring a ray or poke interaction.
+        Selectable continueButton = FindFirstUsableContinueButton();
+        if (continueButton != null)
+        {
+            if (!IsUsable(selected) || !IsContinueButton(selected) ||
+                CanvasFor(selected) != CanvasFor(continueButton))
+            {
+                Select(eventSystem, continueButton);
+            }
+            else if (eventSystem.currentSelectedGameObject != selected.gameObject)
+            {
+                Select(eventSystem, selected);
+            }
+            return;
+        }
+
         Selectable eventSelected = eventSystem.currentSelectedGameObject == null
             ? null
             : eventSystem.currentSelectedGameObject.GetComponentInParent<Selectable>();
@@ -91,13 +163,22 @@ public static class GamepadUIInput
         if (selected == null)
             return;
 
-        selectedCanvas = CanvasFor(selected);
-        eventSystem.SetSelectedGameObject(selected.gameObject);
-        selected.Select();
+        Select(eventSystem, selected);
     }
 
     static Selectable FindFirstUsableSelectable()
     {
+        Selectable questionControl = FindFirstQuestionControl();
+        if (questionControl != null)
+            return questionControl;
+
+        // Confidence and General Discomfort screens both open with their
+        // slider as the active control, so the first horizontal thumbstick
+        // movement changes its value immediately.
+        Selectable slider = FindFirstUsableSlider();
+        if (slider != null)
+            return slider;
+
         Selectable[] all = Selectable.allSelectablesArray;
         Selectable best = null;
         int bestSortingOrder = int.MinValue;
@@ -119,6 +200,55 @@ public static class GamepadUIInput
         return best;
     }
 
+    static Selectable FindFirstQuestionControl()
+    {
+        Selectable[] all = Selectable.allSelectablesArray;
+        Selectable first = null;
+        int firstIndex = int.MaxValue;
+        foreach (Selectable candidate in all)
+        {
+            if (!IsUsable(candidate) || !IsQuestionControl(candidate))
+                continue;
+
+            int index = QuestionControlIndex(candidate);
+            if (first == null || index < firstIndex)
+            {
+                first = candidate;
+                firstIndex = index;
+            }
+        }
+
+        return first;
+    }
+
+    static Selectable FindFirstUsableSlider()
+    {
+        Selectable best = null;
+        int bestSortingOrder = int.MinValue;
+        foreach (Selectable candidate in Selectable.allSelectablesArray)
+        {
+            if (!(candidate is Slider) || !IsUsable(candidate))
+                continue;
+
+            Canvas canvas = CanvasFor(candidate);
+            int sortingOrder = canvas != null ? canvas.sortingOrder : int.MinValue;
+            if (best == null || sortingOrder > bestSortingOrder)
+            {
+                best = candidate;
+                bestSortingOrder = sortingOrder;
+            }
+        }
+        return best;
+    }
+
+    static Selectable FindFirstUsableContinueButton()
+    {
+        foreach (Selectable candidate in Selectable.allSelectablesArray)
+            if (IsContinueButton(candidate) && IsUsable(candidate))
+                return candidate;
+        return null;
+    }
+
     static void HandleStick(EventSystem eventSystem, Vector2 stick)
     {
         float magnitude = stick.magnitude;
@@ -135,6 +265,15 @@ public static class GamepadUIInput
         float direction = horizontal ? Mathf.Sign(stick.x) : Mathf.Sign(stick.y);
 
         Slider slider = selected as Slider;
+        if (slider == null && horizontal && FindFirstQuestionControl() == null)
+        {
+            // Keep slider input reliable even if Unity temporarily moved the
+            // EventSystem focus to the Confirm button.
+            slider = FindFirstUsableSlider() as Slider;
+            if (slider != null)
+                Select(eventSystem, slider);
+        }
+
         if (slider != null && horizontal)
         {
             float step = slider.wholeNumbers
@@ -155,6 +294,15 @@ public static class GamepadUIInput
     {
         if (selected == null)
             return;
+
+        // Question controls are a dedicated vertical list. Navigate only in
+        // that list, so the thumbstick moves A-D and then Repeat scenario.
+        if (IsQuestionControl(selected))
+        {
+            if (!horizontal)
+                MoveQuestionSelection(eventSystem, direction);
+            return;
+        }
 
         RectTransform currentRect = selected.transform as RectTransform;
         Vector3 axis = horizontal
@@ -190,7 +338,40 @@ public static class GamepadUIInput
         if (best == null)
             return;
 
-        selected = best;
+        Select(eventSystem, best);
+    }
+
+    static void MoveQuestionSelection(EventSystem eventSystem, float direction)
+    {
+        List<Selectable> controls = new List<Selectable>();
+        Canvas canvas = CanvasFor(selected);
+        foreach (Selectable candidate in Selectable.allSelectablesArray)
+        {
+            if (IsUsable(candidate) && IsQuestionControl(candidate) && CanvasFor(candidate) == canvas)
+                controls.Add(candidate);
+        }
+
+        controls.Sort((left, right) => QuestionControlIndex(left).CompareTo(QuestionControlIndex(right)));
+        int currentIndex = controls.IndexOf(selected);
+        if (currentIndex < 0 || controls.Count == 0)
+            return;
+
+        // Thumbstick down (negative Y) moves from A to B and eventually to
+        // Repeat; up moves back through the same list.
+        int nextIndex = currentIndex + (direction < 0f ? 1 : -1);
+        if (nextIndex < 0 || nextIndex >= controls.Count)
+            return;
+
+        Select(eventSystem, controls[nextIndex]);
+    }
+
+    static void Select(EventSystem eventSystem, Selectable next)
+    {
+        if (!IsUsable(next))
+            return;
+
+        selected = next;
+        selectedCanvas = CanvasFor(selected);
         eventSystem.SetSelectedGameObject(selected.gameObject);
         selected.Select();
     }
@@ -233,6 +414,76 @@ public static class GamepadUIInput
 
         TMP_Text label = candidate.GetComponentInChildren<TMP_Text>(true);
         return label != null && label.text.IndexOf("start", System.StringComparison.OrdinalIgnoreCase) >= 0;
+    }
+
+    static bool IsAnswerButton(Selectable candidate)
+    {
+        return candidate is Button &&
+               candidate.name.StartsWith("Answer_", StringComparison.OrdinalIgnoreCase);
+    }
+
+    static bool IsRepeatButton(Selectable candidate)
+    {
+        if (!(candidate is Button) || !IsUsable(candidate))
+            return false;
+
+        if (candidate.name.Equals("Repeat", StringComparison.OrdinalIgnoreCase) ||
+            candidate.name.Equals("RepeatScenario", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        TMP_Text label = candidate.GetComponentInChildren<TMP_Text>(true);
+        return label != null && label.text.IndexOf("Repeat", StringComparison.OrdinalIgnoreCase) >= 0;
+    }
+
+    static bool IsQuestionControl(Selectable candidate)
+    {
+        return IsAnswerButton(candidate) || IsRepeatButton(candidate);
+    }
+
+    static bool IsConfirmControl(Selectable candidate)
+    {
+        if (!(candidate is Button) || !IsUsable(candidate))
+            return false;
+
+        if (candidate.name.Equals("Confirm", StringComparison.OrdinalIgnoreCase) ||
+            candidate.name.Equals("ConfirmConfidence", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        TMP_Text label = candidate.GetComponentInChildren<TMP_Text>(true);
+        return label != null && label.text.IndexOf("Confirm", StringComparison.OrdinalIgnoreCase) >= 0;
+    }
+
+    static bool IsContinueButton(Selectable candidate)
+    {
+        if (!(candidate is Button) || !IsUsable(candidate))
+            return false;
+
+        if (candidate.name.Equals("Continue", StringComparison.OrdinalIgnoreCase) ||
+            candidate.name.Equals("ContinueAfterFeedback", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        TMP_Text label = candidate.GetComponentInChildren<TMP_Text>(true);
+        return label != null && label.text.IndexOf("Continue", StringComparison.OrdinalIgnoreCase) >= 0;
+    }
+
+    static int AnswerIndex(Selectable candidate)
+    {
+        if (candidate == null) return int.MaxValue;
+        string suffix = candidate.name.Substring("Answer_".Length);
+        if (int.TryParse(suffix, out int numeric)) return numeric;
+        if (suffix.Length == 1)
+        {
+            char letter = char.ToUpperInvariant(suffix[0]);
+            if (letter >= 'A' && letter <= 'Z') return letter - 'A';
+        }
+        return int.MaxValue;
+    }
+
+    static int QuestionControlIndex(Selectable candidate)
+    {
+        if (IsAnswerButton(candidate))
+            return AnswerIndex(candidate);
+        return IsRepeatButton(candidate) ? 4 : int.MaxValue;
     }
 
     static Canvas CanvasFor(Selectable candidate)

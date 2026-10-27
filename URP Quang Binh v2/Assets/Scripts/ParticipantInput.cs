@@ -10,6 +10,7 @@ public static class ParticipantInput
 {
     static InputAction confirm;
     static InputAction start;
+    static InputAction simulationStart;
     static InputAction rightTrigger;
     static InputAction rightGrip;
     static InputAction leftGrip;
@@ -106,6 +107,21 @@ public static class ParticipantInput
         return questAction != null && questAction.IsPressed();
     }
 
+    /// <summary>
+    /// Y starts the flood simulation and the feedback simulation for Gamepad
+    /// participants. Non-Gamepad participants keep their existing A action.
+    /// </summary>
+    public static bool SimulationStartWasPressedThisFrame(InputAction questAction)
+    {
+        if (IsGamepadParticipant)
+        {
+            EnsureEnabled();
+            return simulationStart.WasPressedThisFrame();
+        }
+
+        return questAction != null && questAction.WasPressedThisFrame();
+    }
+
     public static bool GripWasPressedThisFrame(InputAction questAction)
     {
         if (IsGamepadParticipant)
@@ -173,6 +189,8 @@ public static class ParticipantInput
             "<XRController>{RightHand}/primaryButton");
         start = new InputAction("Quest Gamepad Start", InputActionType.Button,
             "<XRController>{RightHand}/secondaryButton");
+        simulationStart = new InputAction("Quest Gamepad Simulation Start", InputActionType.Button,
+            "<XRController>{LeftHand}/secondaryButton");
         rightTrigger = new InputAction("Quest Gamepad Trigger", InputActionType.Button,
             "<XRController>{RightHand}/triggerPressed");
         rightGrip = new InputAction("Quest Gamepad Right Grip", InputActionType.Button,
@@ -191,6 +209,7 @@ public static class ParticipantInput
     {
         confirm.Enable();
         start.Enable();
+        simulationStart.Enable();
         rightTrigger.Enable();
         rightGrip.Enable();
         leftGrip.Enable();
@@ -203,6 +222,7 @@ public static class ParticipantInput
     {
         confirm.Disable();
         start.Disable();
+        simulationStart.Disable();
         rightTrigger.Disable();
         rightGrip.Disable();
         leftGrip.Disable();
@@ -215,6 +235,7 @@ public static class ParticipantInput
     {
         confirm?.Dispose();
         start?.Dispose();
+        simulationStart?.Dispose();
         rightTrigger?.Dispose();
         rightGrip?.Dispose();
         leftGrip?.Dispose();
@@ -222,6 +243,7 @@ public static class ParticipantInput
         rightStick?.Dispose();
         confirm = null;
         start = null;
+        simulationStart = null;
         rightTrigger = null;
         rightGrip = null;
         leftGrip = null;
