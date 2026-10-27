@@ -82,10 +82,10 @@ public sealed class PlayMakerTerrainFloodScenario03 : MonoBehaviour
             ClearDykeManagerChildren();
             continuePrompt = FloodScenarioContinuePrompt.Show();
             phase = Phase.WaitingForA;
-            Debug.Log("A1-P1 ready. Press the right Quest A button to continue.");
+            Debug.Log($"A1-P1 ready. Press the right Quest {(ParticipantInput.IsGamepadParticipant ? "B" : "A")} button to continue.");
         }
-        if (phase == Phase.WaitingForA && questA.WasPressedThisFrame()) StartPathwayPreview();
-        if (phase == Phase.WaitingForSimulationA && questA.WasPressedThisFrame()) StartSimulation();
+        if (phase == Phase.WaitingForA && ParticipantInput.StartWasPressedThisFrame(questA)) StartPathwayPreview();
+        if (phase == Phase.WaitingForSimulationA && ParticipantInput.StartWasPressedThisFrame(questA)) StartSimulation();
         if (phase != Phase.Preview && phase != Phase.Running) return;
         elapsed += Time.deltaTime;
         float currentDuration = phase == Phase.Preview ? pathwayViewingDuration : duration;

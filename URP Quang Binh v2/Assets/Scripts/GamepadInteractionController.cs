@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using Unity.XR.CoreUtils;
 using UnityEngine.XR.Interaction.Toolkit;
 using UnityEngine.XR.Interaction.Toolkit.Interactors;
@@ -8,45 +9,30 @@ using UnityEngine.XR.Interaction.Toolkit.Interactors;
 /// <summary>
 /// Turns the Quest 3 controllers into the participant Gamepad condition.
 /// The GAMEPAD model replaces the left controller model and the right
-/// controller model is hidden. The right Quest thumbstick steers one visual
-/// ray that starts at the center of the GAMEPAD model.
+/// controller model is hidden. The left stick controls locomotion and the
+/// right stick is reserved for direct UI navigation.
 ///
-/// The normal XR ray, poke, near/far and direct interactors are disabled for
-/// this condition. They are restored if the condition is disabled again.
+/// Existing XR ray, poke, near/far and direct interactors are disabled in this
+/// condition because UI selection is handled by GamepadUIInput.
 /// </summary>
 [DefaultExecutionOrder(-100)]
 public sealed class GamepadInteractionController : MonoBehaviour
 {
-    public bool IsGamepadRayActive => gamepadModeActive && rayOrigin != null;
-    public Transform GamepadRayOrigin => rayOrigin;
-
     [Header("Gamepad visual")]
     [SerializeField] Transform gamepadPrefab;
     [SerializeField] Vector3 gamepadLocalPosition;
     [SerializeField] Vector3 gamepadLocalEulerAngles;
     [Min(.01f)] [SerializeField] float gamepadLocalScale = 1f;
 
-    [Header("Quest Gamepad ray")]
-    [SerializeField] Vector3 rayLocalPosition = new Vector3(-0.05f, 0f, 0f);
-    // The GAMEPAD model's forward axis is its local +Y axis. Rotating the
-    // ray -90 degrees around X makes the initial ray leave the model forward.
-    [SerializeField] Vector3 rayLocalEulerAngles = new Vector3(-90f, 0f, 0f);
-    [Min(0.1f)] [SerializeField] float rayLength = 20f;
-    [Min(1f)] [SerializeField] float rayYawSpeed = 110f;
-    [Min(1f)] [SerializeField] float rayPitchSpeed = 90f;
-    [SerializeField] float minimumRayPitch = -70f;
-    [SerializeField] float maximumRayPitch = 70f;
-    [Range(0f, .5f)] [SerializeField] float stickDeadzone = .12f;
-    [Min(.001f)] [SerializeField] float rayWidth = .008f;
-    [SerializeField] Color rayColor = new Color(.15f, 1f, .35f, 1f);
-
     [Header("Gamepad locomotion")]
     [Min(0f)] [SerializeField] float forwardBackwardSpeed = 5f;
     [Min(0f)] [SerializeField] float verticalSpeed = 2f;
     [SerializeField] float minimumHeight;
     [SerializeField] float maximumHeight = 150f;
+    [Range(0f, .5f)] [SerializeField] float stickDeadzone = .12f;
 
     GameObject gamepadVisual;
+    GamepadDykeBuilder dykeBuilder;
     Transform movementRoot;
     ActionBasedController leftController;
     ActionBasedController rightController;
@@ -57,10 +43,6 @@ public sealed class GamepadInteractionController : MonoBehaviour
     bool originalLeftModelHidden;
     bool originalRightModelHidden;
     bool gamepadModeActive;
-    Transform rayOrigin;
-    LineRenderer gamepadRay;
-    float rayYaw;
-    float rayPitch;
 
     readonly List<GameObject> disabledInteractorObjects = new List<GameObject>();
     readonly List<Behaviour> disabledLegacyMovement = new List<Behaviour>();
@@ -70,6 +52,9 @@ public sealed class GamepadInteractionController : MonoBehaviour
         rightController = GetComponent<ActionBasedController>();
         XROrigin origin = FindFirstObjectByType<XROrigin>();
         movementRoot = origin != null ? origin.transform : transform.root;
+        dykeBuilder = GetComponent<GamepadDykeBuilder>();
+        if (dykeBuilder == null)
+            dykeBuilder = gameObject.AddComponent<GamepadDykeBuilder>();
     }
 
     void Update()
@@ -82,16 +67,22 @@ public sealed class GamepadInteractionController : MonoBehaviour
         }
 
         if (!gamepadModeActive)
-            return;
-
-        bool rightGripHeld = ParticipantInput.RightGripIsPressed();
-        if (rightGripHeld)
-            UpdateGamepadRay();
-        else
         {
-            HideGamepadRay();
-            UpdateGamepadMovement();
+            dykeBuilder?.Cancel();
+            return;
         }
+
+        UpdateGamepadMovement();
+        // Process dyke input from this already-running controller loop. This
+        // avoids a second per-frame MonoBehaviour Update.
+        dykeBuilder?.Tick();
+        // The right stick controls the terrain cursor while the right grip is
+        // held. Do not let UI navigation consume that same input during a
+        // construction draft.
+        if (!GamepadDykeBuilder.IsBuildModeActive && !ParticipantInput.RightGripIsPressed())
+            GamepadUIInput.Tick();
+        if (ParticipantInput.GamepadStartWasPressedThisFrame())
+            GamepadUIInput.SubmitTutorialStart(EventSystem.current);
     }
 
     void EnableGamepadMode()
@@ -101,31 +92,29 @@ public sealed class GamepadInteractionController : MonoBehaviour
         SpawnGamepadVisual();
         DisableLegacyInteractions();
         DisableLegacyMovement();
+        GamepadUIInput.ResetSelection();
         gamepadModeActive = true;
     }
 
     void DisableGamepadMode()
     {
         gamepadModeActive = false;
+        dykeBuilder?.Cancel();
         ParticipantInput.SetGamepadModeEnabled(false);
+        GamepadUIInput.ResetSelection();
         RestoreLegacyMovement();
         RestoreLegacyInteractions();
         RestoreRightQuestControllerModel();
         RestoreLeftQuestControllerModel();
 
-        if (gamepadRay != null && gamepadRay.material != null)
-            Destroy(gamepadRay.material);
         if (gamepadVisual != null)
             Destroy(gamepadVisual);
         gamepadVisual = null;
-        rayOrigin = null;
-        gamepadRay = null;
     }
 
     void DisableLegacyInteractions()
     {
         disabledInteractorObjects.Clear();
-
         XRBaseInteractor[] interactors = FindObjectsByType<XRBaseInteractor>(
             FindObjectsInactive.Include, FindObjectsSortMode.None);
 
@@ -192,45 +181,8 @@ public sealed class GamepadInteractionController : MonoBehaviour
         disabledLegacyMovement.Clear();
     }
 
-    void UpdateGamepadRay()
-    {
-        if (rayOrigin == null)
-            return;
-
-        if (gamepadRay != null)
-            gamepadRay.enabled = true;
-
-        Vector2 stick = ParticipantInput.ReadGamepadRightStick();
-        if (stick.sqrMagnitude < stickDeadzone * stickDeadzone)
-            return;
-
-        // Make the ray four-directional. A small diagonal component is
-        // ignored, so up is only up, down only down, left only left, and
-        // right only right.
-        if (Mathf.Abs(stick.x) > Mathf.Abs(stick.y))
-            stick = new Vector2(Mathf.Sign(stick.x), 0f);
-        else
-            stick = new Vector2(0f, Mathf.Sign(stick.y));
-
-        // Invert the local model axes so right/up on the thumbsticks move the
-        // visible ray right/up instead of mirrored left/down.
-        rayYaw -= stick.x * rayYawSpeed * Time.unscaledDeltaTime;
-        rayPitch = Mathf.Clamp(rayPitch + stick.y * rayPitchSpeed * Time.unscaledDeltaTime,
-            minimumRayPitch, maximumRayPitch);
-        rayOrigin.localRotation = Quaternion.Euler(rayPitch, rayYaw, 0f) *
-                                  Quaternion.Euler(rayLocalEulerAngles);
-    }
-
-    void HideGamepadRay()
-    {
-        if (gamepadRay != null)
-            gamepadRay.enabled = false;
-    }
-
     void UpdateGamepadMovement()
     {
-        if (gamepadRay != null)
-            gamepadRay.enabled = false;
         if (movementRoot == null)
             return;
 
@@ -246,8 +198,8 @@ public sealed class GamepadInteractionController : MonoBehaviour
         forward.y = 0f;
         forward.Normalize();
 
-        // Keep the two movement directions separate. A slight diagonal input
-        // therefore does not combine forward movement with flying.
+        // A slight diagonal input does not combine forward movement with
+        // flying; the stronger axis determines the locomotion direction.
         Vector3 movement;
         if (Mathf.Abs(stick.y) >= Mathf.Abs(stick.x))
             movement = forward * (stick.y * forwardBackwardSpeed);
@@ -316,32 +268,6 @@ public sealed class GamepadInteractionController : MonoBehaviour
         gamepadVisual.transform.localScale *= gamepadLocalScale;
         leftController.model = instance;
         leftController.hideControllerModel = false;
-        CreateGamepadRay(instance);
-    }
-
-    void CreateGamepadRay(Transform gamepadRoot)
-    {
-        GameObject rayObject = new GameObject("QuestGamepad_VisualRay");
-        rayObject.transform.SetParent(gamepadRoot, false);
-        rayOrigin = rayObject.transform;
-        rayOrigin.localPosition = rayLocalPosition;
-        rayOrigin.localRotation = Quaternion.Euler(rayLocalEulerAngles);
-
-        gamepadRay = rayObject.AddComponent<LineRenderer>();
-        gamepadRay.useWorldSpace = false;
-        gamepadRay.positionCount = 2;
-        gamepadRay.SetPosition(0, Vector3.zero);
-        gamepadRay.SetPosition(1, Vector3.forward * rayLength);
-        gamepadRay.startWidth = rayWidth;
-        gamepadRay.endWidth = rayWidth;
-        gamepadRay.startColor = rayColor;
-        gamepadRay.endColor = rayColor;
-        gamepadRay.numCapVertices = 4;
-
-        Shader shader = Shader.Find("Universal Render Pipeline/Unlit");
-        if (shader == null) shader = Shader.Find("Sprites/Default");
-        if (shader != null)
-            gamepadRay.material = new Material(shader);
     }
 
     void RestoreLeftQuestControllerModel()
@@ -372,8 +298,7 @@ public sealed class GamepadInteractionController : MonoBehaviour
 
     void OnDestroy()
     {
-        // Do not reactivate controller or interactor objects while Unity is
-        // destroying the scene. The scene is being torn down already.
+        // The scene is already being torn down, so do not reactivate objects.
         if (!gamepadModeActive)
             return;
 

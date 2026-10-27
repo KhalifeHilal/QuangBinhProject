@@ -53,8 +53,8 @@ public sealed class A1P2ScenarioFlow : MonoBehaviour
 
     void Update()
     {
-        if (phase == Phase.WaitingForA && questA.WasPressedThisFrame()) StartPreview();
-        if (phase == Phase.BuildingDykes && questA.WasPressedThisFrame()) StartFlood();
+        if (phase == Phase.WaitingForA && ParticipantInput.StartWasPressedThisFrame(questA)) StartPreview();
+        if (phase == Phase.BuildingDykes && ParticipantInput.StartWasPressedThisFrame(questA)) StartFlood();
         if (phase != Phase.Preview && phase != Phase.Flood) return;
         elapsed += Time.deltaTime;
         if (phase == Phase.Preview && elapsed >= viewingDuration) ShowQuestion();
@@ -245,7 +245,7 @@ static class P2Panel
         GameObject root = CanvasRoot("A1_P2_Start", new Vector2(950, 350));
         FloodLearningUI.Text("Title", root.transform, "A1 - P2", 40, FontStyles.Bold, -35, 55, TextAlignmentOptions.Center, 40);
         FloodLearningUI.Text("Topic", root.transform, "Topography", 45, FontStyles.Bold, -110, 65, TextAlignmentOptions.Center, 40);
-        FloodLearningUI.Text("Continue", root.transform, "Press A to continue", 35, FontStyles.Normal, -220, 55, TextAlignmentOptions.Center, 40).color = new Color(.3f, .8f, 1f);
+        FloodLearningUI.Text("Continue", root.transform, ParticipantInput.IsGamepadParticipant ? "Press B to continue" : "Press A to continue", 35, FontStyles.Normal, -220, 55, TextAlignmentOptions.Center, 40).color = new Color(.3f, .8f, 1f);
         FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.1f); return root;
     }
     public static GameObject CreatePreviewHint()
@@ -258,7 +258,10 @@ static class P2Panel
     {
         GameObject root = CanvasRoot("A1_P2_Build", new Vector2(1100, 390));
         FloodLearningUI.Text("Title", root.transform, "A1 - P2  |  Build protection", 39, FontStyles.Bold, -35, 58, TextAlignmentOptions.Center, 45);
-        FloodLearningUI.Text("Prompt", root.transform, "Build one dyke up to 3.5 metres long anywhere on the terrain with the trigger.\nPoint at it and press Grip to destroy it. Press A when you are finished.", 30, FontStyles.Bold, -135, 135, TextAlignmentOptions.Center, 55).color = new Color(.35f, .82f, 1f);
+        string instructions = ParticipantInput.IsGamepadParticipant
+            ? "Build one dyke up to 3.5 m. Hold right Grip and move the terrain cursor with the right thumbstick.\nPress Trigger once for the start and once for the end.\nPress A on a dyke to remove it. Release Grip to cancel. Press B when finished."
+            : "Build one dyke up to 3.5 metres long anywhere on the terrain with the trigger.\nPoint at it and press Grip to destroy it. Press A when you are finished.";
+        FloodLearningUI.Text("Prompt", root.transform, instructions, 30, FontStyles.Bold, -135, 135, TextAlignmentOptions.Center, 55).color = new Color(.35f, .82f, 1f);
         FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.1f); return root;
     }
     public static void ShowQuestion(Action repeat, Action<int> answer)
@@ -357,7 +360,7 @@ static class ScenarioFeedbackStage
             "The model solution is shown together with your barriers.", 30,
             FontStyles.Normal, -225, 60, TextAlignmentOptions.Center, 55);
         FloodLearningUI.Text("SimulationPrompt", panel.transform,
-            "Press A to start the feedback simulation.", 30,
+            ParticipantInput.IsGamepadParticipant ? "Press B to start the feedback simulation." : "Press A to start the feedback simulation.", 30,
             FontStyles.Normal, -300, 55, TextAlignmentOptions.Center, 55).color = new Color(.35f, .82f, 1f);
         UnityEngine.UI.Button continueButton = FloodLearningUI.Button("Continue", panel.transform, "Continue", -375, 82, 29,
             () =>
@@ -519,7 +522,7 @@ sealed class ScenarioFeedbackStageController : MonoBehaviour
         if (SimulationFinished) return;
         if (waitingForStart)
         {
-            if (questA != null && questA.WasPressedThisFrame())
+            if (questA != null && ParticipantInput.StartWasPressedThisFrame(questA))
             {
                 waitingForStart = false;
                 StartSimulation();

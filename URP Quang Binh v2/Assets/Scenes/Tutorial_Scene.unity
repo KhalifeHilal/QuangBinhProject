@@ -287314,6 +287314,7 @@ GameObject:
   - component: {fileID: 4714331886476828489}
   - component: {fileID: 2144416439156517122}
   - component: {fileID: 9000000000000000001}
+  - component: {fileID: 9000000000000000002}
   m_Layer: 2
   m_Name: Right Controller
   m_TagString: Untagged
@@ -334495,17 +334496,28 @@ MonoBehaviour:
   gamepadLocalPosition: {x: 0, y: 0, z: 0}
   gamepadLocalEulerAngles: {x: 0, y: 0, z: 0}
   gamepadLocalScale: 1
-  rayLocalPosition: {x: -0.05, y: 0, z: 0}
-  rayLocalEulerAngles: {x: -90, y: 0, z: 0}
-  rayLength: 20
-  rayYawSpeed: 110
-  rayPitchSpeed: 90
-  minimumRayPitch: -70
-  maximumRayPitch: 70
-  stickDeadzone: 0.12
-  rayWidth: 0.008
-  rayColor: {r: 0.15, g: 1, b: 0.35, a: 1}
   forwardBackwardSpeed: 5
   verticalSpeed: 2
   minimumHeight: 0
   maximumHeight: 150
+--- !u!114 &9000000000000000002
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4714331886476828493}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d3a6a2e36e0f4c8b9b675d6c8c4d9d21, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  cursorSpeed: 2.5
+  stickDeadzone: 0.15
+  cursorHeight: 0.08
+  deletionRadius: 0.3
+  terrainRayHeight: 250
+  terrainRayDistance: 600
+  tutorialSnapRadius: 0.45
+  hoverCheckInterval: 0.1
+  sceneSearchInterval: 0.5

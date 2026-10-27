@@ -13,8 +13,7 @@ public class MoveVertical : InputData
 
     private void FixedUpdate()
     {
-        // Gamepad participants are moved by GamepadInteractionController and
-        // only while the left grip is held.
+        // Gamepad participants are moved by GamepadInteractionController.
         if (ParticipantInput.IsGamepadParticipant)
             return;
         // if (SimulationManager.Instance.IsGameState(GameState.GAME))

@@ -9,6 +9,7 @@ using UnityEngine.XR.Interaction.Toolkit.Inputs.Readers;
 public static class ParticipantInput
 {
     static InputAction confirm;
+    static InputAction start;
     static InputAction rightTrigger;
     static InputAction rightGrip;
     static InputAction leftGrip;
@@ -47,6 +48,37 @@ public static class ParticipantInput
         {
             EnsureEnabled();
             return confirm.WasPressedThisFrame();
+        }
+
+        return questAction != null && questAction.WasPressedThisFrame();
+    }
+
+    /// <summary>A button used by the Gamepad UI to submit the highlighted control.</summary>
+    public static bool GamepadConfirmWasPressedThisFrame()
+    {
+        if (!IsGamepadParticipant) return false;
+        EnsureEnabled();
+        return confirm.WasPressedThisFrame();
+    }
+
+    /// <summary>Reads the right B button for tutorial/scenario start prompts.</summary>
+    public static bool GamepadStartWasPressedThisFrame()
+    {
+        if (!IsGamepadParticipant) return false;
+        EnsureEnabled();
+        return start.WasPressedThisFrame();
+    }
+
+    /// <summary>
+    /// B starts or continues non-UI phases for Gamepad participants. Other
+    /// interaction modes keep their existing action (usually A).
+    /// </summary>
+    public static bool StartWasPressedThisFrame(InputAction questAction)
+    {
+        if (IsGamepadParticipant)
+        {
+            EnsureEnabled();
+            return start.WasPressedThisFrame();
         }
 
         return questAction != null && questAction.WasPressedThisFrame();
@@ -107,18 +139,12 @@ public static class ParticipantInput
         return leftStick.ReadValue<Vector2>();
     }
 
-    /// <summary>Right-stick value used for the right-hand virtual ray.</summary>
-    public static Vector2 ReadGamepadRayLook()
+    /// <summary>Reads the Quest right thumbstick for Gamepad UI navigation.</summary>
+    public static Vector2 ReadGamepadRightStick()
     {
         if (!IsGamepadParticipant) return Vector2.zero;
         EnsureEnabled();
         return rightStick.ReadValue<Vector2>();
-    }
-
-    /// <summary>Reads the Quest right thumbstick for the virtual ray.</summary>
-    public static Vector2 ReadGamepadRightStick()
-    {
-        return ReadGamepadRayLook();
     }
 
     /// <summary>Creates an XRI reader backed by the Quest right trigger.</summary>
@@ -145,6 +171,8 @@ public static class ParticipantInput
 
         confirm = new InputAction("Quest Gamepad Confirm", InputActionType.Button,
             "<XRController>{RightHand}/primaryButton");
+        start = new InputAction("Quest Gamepad Start", InputActionType.Button,
+            "<XRController>{RightHand}/secondaryButton");
         rightTrigger = new InputAction("Quest Gamepad Trigger", InputActionType.Button,
             "<XRController>{RightHand}/triggerPressed");
         rightGrip = new InputAction("Quest Gamepad Right Grip", InputActionType.Button,
@@ -155,13 +183,14 @@ public static class ParticipantInput
         // and works with both the Quest 3 controller layout and OpenXR.
         leftStick = new InputAction("Quest Gamepad Movement", InputActionType.Value,
             "<XRController>{LeftHand}/primary2DAxis");
-        rightStick = new InputAction("Quest Gamepad Ray Look", InputActionType.Value,
+        rightStick = new InputAction("Quest Gamepad UI Navigation", InputActionType.Value,
             "<XRController>{RightHand}/primary2DAxis");
     }
 
     static void EnableActions()
     {
         confirm.Enable();
+        start.Enable();
         rightTrigger.Enable();
         rightGrip.Enable();
         leftGrip.Enable();
@@ -173,6 +202,7 @@ public static class ParticipantInput
     static void DisableActions()
     {
         confirm.Disable();
+        start.Disable();
         rightTrigger.Disable();
         rightGrip.Disable();
         leftGrip.Disable();
@@ -184,12 +214,14 @@ public static class ParticipantInput
     static void DisposeActions()
     {
         confirm?.Dispose();
+        start?.Dispose();
         rightTrigger?.Dispose();
         rightGrip?.Dispose();
         leftGrip?.Dispose();
         leftStick?.Dispose();
         rightStick?.Dispose();
         confirm = null;
+        start = null;
         rightTrigger = null;
         rightGrip = null;
         leftGrip = null;

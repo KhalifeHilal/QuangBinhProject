@@ -91,7 +91,10 @@ public sealed class FloodScenarioQuizPanel : MonoBehaviour
         scenario.color = new Color(.88f, .94f, 1f);
         FloodLearningUI.Text("Question", questionGroup.transform, questionText, 34, FontStyles.Bold, -235, 90, TextAlignmentOptions.TopLeft, 55);
         for (int i = 0; i < CurrentAnswers.Length; i++) answerButtons[i] = CreateAnswerButton(i, -350 - i * 125);
-        TMP_Text hint = FloodLearningUI.Text("Hint", questionGroup.transform, "Point at an answer and confirm it with the controller trigger.", 27, FontStyles.Normal, -875, 55, TextAlignmentOptions.Center, 55);
+        string hintText = ParticipantInput.IsGamepadParticipant
+            ? "Use the right thumbstick to highlight an answer. Press A to select."
+            : "Point at an answer and confirm it with the controller trigger.";
+        TMP_Text hint = FloodLearningUI.Text("Hint", questionGroup.transform, hintText, 27, FontStyles.Normal, -875, 55, TextAlignmentOptions.Center, 55);
         hint.color = new Color(.72f, .86f, 1);
         FloodLearningUI.Button("RepeatScenario", questionGroup.transform, "Repeat scenario", -965, 82, 29, RepeatScenario, 390);
         BuildConfidenceStep();
@@ -213,7 +216,13 @@ static class FloodLearningUI
         GameObject obj = new GameObject(name, typeof(RectTransform), typeof(Image), typeof(Button)); obj.transform.SetParent(parent, false);
         RectTransform r = (RectTransform)obj.transform; r.anchorMin = r.anchorMax = new Vector2(.5f, 1); r.pivot = new Vector2(.5f, 1); r.anchoredPosition = new Vector2(0, top); r.sizeDelta = new Vector2(width < 0 ? 1340 : width, height);
         Image image = obj.GetComponent<Image>(); FloodLearningUIStyle.ApplyButton(image);
-        Button button = obj.GetComponent<Button>(); ColorBlock colors = button.colors; colors.highlightedColor = new Color(.08f, .46f, .68f, 1); colors.pressedColor = new Color(.04f, .64f, .88f, 1); button.colors = colors;
+        Button button = obj.GetComponent<Button>();
+        ColorBlock colors = button.colors;
+        colors.normalColor = FloodLearningUIStyle.ButtonColor;
+        colors.highlightedColor = FloodLearningUIStyle.ButtonHighlight;
+        colors.selectedColor = FloodLearningUIStyle.ButtonHighlight;
+        colors.pressedColor = new Color(.04f, .64f, .88f, 1);
+        button.colors = colors;
         button.onClick.AddListener(() => { FloodAudio.PlayClick(); action?.Invoke(); });
         TMP_Text text = Text("Label", obj.transform, label, fontSize, FontStyles.Normal, -8, height - 16, TextAlignmentOptions.MidlineLeft, 25); text.enableAutoSizing = true; text.fontSizeMin = 20; text.fontSizeMax = fontSize;
         return button;
@@ -254,7 +263,8 @@ sealed class FloodScenarioContinuePrompt : MonoBehaviour
         RectTransform r = (RectTransform)root.transform; r.sizeDelta = new Vector2(900, 330); r.localScale = Vector3.one * .0015f; FloodLearningUIStyle.ApplyPanel(root.AddComponent<Image>());
         FloodLearningUI.Text("Title", root.transform, "A1 - P1", 39, FontStyles.Bold, -35, 55, TextAlignmentOptions.Center, 45);
         FloodLearningUI.Text("Scenario", root.transform, "Flood Pathway Identification", 43, FontStyles.Bold, -105, 65, TextAlignmentOptions.Center, 45);
-        TMP_Text prompt = FloodLearningUI.Text("Prompt", root.transform, "Press A to continue", 35, FontStyles.Normal, -210, 55, TextAlignmentOptions.Center, 45); prompt.color = new Color(.35f, .82f, 1);
+        string continueText = ParticipantInput.IsGamepadParticipant ? "Press B to continue" : "Press A to continue";
+        TMP_Text prompt = FloodLearningUI.Text("Prompt", root.transform, continueText, 35, FontStyles.Normal, -210, 55, TextAlignmentOptions.Center, 45); prompt.color = new Color(.35f, .82f, 1);
         FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.1f); return root;
     }
 
@@ -264,7 +274,8 @@ sealed class FloodScenarioContinuePrompt : MonoBehaviour
         RectTransform r = (RectTransform)root.transform; r.sizeDelta = new Vector2(1000, 330); r.localScale = Vector3.one * .0015f; FloodLearningUIStyle.ApplyPanel(root.AddComponent<Image>());
         FloodLearningUI.Text("Title", root.transform, "A1 - P1", 39, FontStyles.Bold, -35, 55, TextAlignmentOptions.Center, 45);
         FloodLearningUI.Text("Scenario", root.transform, "Flood simulation", 43, FontStyles.Bold, -105, 65, TextAlignmentOptions.Center, 45);
-        TMP_Text prompt = FloodLearningUI.Text("Prompt", root.transform, "Press A to start the simulation", 35, FontStyles.Normal, -210, 55, TextAlignmentOptions.Center, 45); prompt.color = new Color(.35f, .82f, 1);
+        string startText = ParticipantInput.IsGamepadParticipant ? "Press B to start the simulation" : "Press A to start the simulation";
+        TMP_Text prompt = FloodLearningUI.Text("Prompt", root.transform, startText, 35, FontStyles.Normal, -210, 55, TextAlignmentOptions.Center, 45); prompt.color = new Color(.35f, .82f, 1);
         FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.1f); return root;
     }
 
@@ -274,7 +285,7 @@ sealed class FloodScenarioContinuePrompt : MonoBehaviour
         RectTransform r = (RectTransform)root.transform; r.sizeDelta = new Vector2(1050, 390); r.localScale = Vector3.one * .0015f; FloodLearningUIStyle.ApplyPanel(root.AddComponent<Image>());
         FloodLearningUI.Text("Title", root.transform, "A1 - P1  |  Build protection", 39, FontStyles.Bold, -35, 58, TextAlignmentOptions.Center, 45);
         TMP_Text prompt = FloodLearningUI.Text("Prompt", root.transform,
-            "Build dykes for your answer anywhere on the terrain with the trigger.\nPoint at one and press Grip to destroy it. Press A when you are finished.",
+            $"Build dykes for your answer anywhere on the terrain with the trigger.\nPoint at one and press Grip to destroy it. Press {(ParticipantInput.IsGamepadParticipant ? "B" : "A")} when you are finished.",
             30, FontStyles.Bold, -135, 125, TextAlignmentOptions.Center, 55); prompt.color = new Color(.35f, .82f, 1);
         FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.1f); return root;
     }

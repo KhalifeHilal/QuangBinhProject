@@ -55,8 +55,7 @@ public sealed class ParticipantCheckInUI : MonoBehaviour
         root.localScale = Vector3.one * .00135f;
         Image background = gameObject.AddComponent<Image>();
         FloodLearningUIStyle.ApplyPanel(background);
-        // The panel itself is raycastable so the hover marker is visible anywhere on it.
-        // Buttons remain the topmost hit and receive the Trigger click.
+        // The check-in screen uses the normal Quest ray and trigger UI.
         background.raycastTarget = true;
 
         Text("Participant Check-In", 48, -35, 0, TextAlignmentOptions.Center, true);
@@ -221,7 +220,12 @@ public sealed class ParticipantCheckInUI : MonoBehaviour
         Image image = obj.GetComponent<Image>(); FloodLearningUIStyle.ApplyButton(image);
         Button button = obj.GetComponent<Button>();
         button.onClick.AddListener(() => { FloodAudio.PlayClick(); action?.Invoke(); });
-        ColorBlock colors = button.colors; colors.highlightedColor = new Color(.12f, .65f, .9f); colors.pressedColor = new Color(.04f, .75f, 1f); button.colors = colors;
+        ColorBlock colors = button.colors;
+        colors.normalColor = FloodLearningUIStyle.ButtonColor;
+        colors.highlightedColor = FloodLearningUIStyle.ButtonHighlight;
+        colors.selectedColor = FloodLearningUIStyle.ButtonHighlight;
+        colors.pressedColor = new Color(.04f, .75f, 1f);
+        button.colors = colors;
         if (numberUp || numberDown)
         {
             GameObject arrowObject = new GameObject("Arrow", typeof(RectTransform), typeof(Image));

@@ -95,6 +95,16 @@ public class DykeManagerTutorial : MonoBehaviour
 
     void Update()
     {
+        // Gamepad participants use GamepadDykeBuilder. The legacy ray-based
+        // input must stay completely idle in that condition, otherwise both
+        // systems would react to the same trigger/grip press.
+        if (ParticipantInput.IsGamepadParticipant)
+        {
+            if (placementMarker != null) placementMarker.SetActive(false);
+            HideFutureLengthLabel();
+            return;
+        }
+
         UpdatePlacementMarker();
         UpdateScenarioDykeHover();
         ProcessFreePlacementGrip();
@@ -181,17 +191,7 @@ public class DykeManagerTutorial : MonoBehaviour
 
     bool IsTerrainHit(RaycastHit hit)
     {
-        if (placementTerrain == null)
-        {
-            foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
-            foreach (Transform child in root.GetComponentsInChildren<Transform>(true))
-                if (child.name == "SM_Tutorial_Terrain_01")
-                {
-                    placementTerrain = child;
-                    placementTerrainRenderer = child.GetComponentInChildren<Renderer>(true);
-                    break;
-                }
-        }
+        EnsurePlacementTerrainReference();
         if (placementTerrain == null || hit.collider == null) return false;
         Transform hitTransform = hit.collider.transform;
 
@@ -250,10 +250,7 @@ public class DykeManagerTutorial : MonoBehaviour
         A1P1ScenarioDyke scenarioDyke = FindScenarioDykeUnderRay();
         if (scenarioDyke != null)
         {
-            SetHoveredScenarioDyke(null);
-            FloodStudyLogger.RecordDykeDestroyed(scenarioDyke.GetComponent<ScenarioDykeLength>());
-            FloodAudio.PlayDykeRemoved();
-            Destroy(scenarioDyke.gameObject);
+            TryDestroyFreePlacementDyke(scenarioDyke);
         }
     }
 
@@ -356,28 +353,190 @@ public class DykeManagerTutorial : MonoBehaviour
         }
     }
 
-    void DrawNewDyke()
+    /// <summary>
+    /// Returns whether a free-placement dyke with these endpoints satisfies
+    /// the active scenario limits. The Gamepad preview uses this for its red
+    /// over-length indication before attempting construction.
+    /// </summary>
+    public bool CanBuildFreePlacementDyke(Vector3 start, Vector3 end)
+    {
+        if (!freePlacement || dykePrefab == null) return false;
+
+        float horizontalDistance = HorizontalDistance(start, end);
+        if (horizontalDistance < 0.05f) return false;
+
+        int currentDykeCount = GetComponentsInChildren<A1P1ScenarioDyke>(true).Length;
+        if (maxFreePlacementDykes > 0 && currentDykeCount >= maxFreePlacementDykes)
+            return false;
+        if (minFreePlacementDykeLengthMeters > 0f && horizontalDistance < minFreePlacementDykeLengthMeters)
+            return false;
+        if (maxFreePlacementDykeLengthMeters > 0f && horizontalDistance > maxFreePlacementDykeLengthMeters)
+            return false;
+        if (maxTotalFreePlacementDykeLengthMeters > 0f &&
+            CurrentFreePlacementLengthMeters() + horizontalDistance > maxTotalFreePlacementDykeLengthMeters)
+            return false;
+
+        return true;
+    }
+
+    /// <summary>Builds a participant dyke from the Gamepad endpoints.</summary>
+    public bool TryBuildFreePlacementDyke(Vector3 start, Vector3 end)
+    {
+        if (!freePlacement) return false;
+        startPoint = SnapToTerrainEdge(start);
+        endPoint = SnapToTerrainEdge(end);
+        if (!CanBuildFreePlacementDyke(startPoint, endPoint)) return false;
+        return DrawNewDyke();
+    }
+
+    /// <summary>
+    /// Finds a tutorial snap point close to the Gamepad terrain cursor. The
+    /// PlayMaker tutorial still uses its authored snap points; the Gamepad
+    /// cursor only replaces the ray used to select them.
+    /// </summary>
+    public bool TryGetTutorialSnapPoint(Vector3 cursor, float radius, out Vector3 point)
+    {
+        point = default;
+        if (freePlacement || snapPoints == null) return false;
+
+        float closestDistance = Mathf.Max(.01f, radius);
+        bool found = false;
+        foreach (Collider snapPoint in snapPoints)
+        {
+            if (snapPoint == null || !snapPoint.gameObject.activeInHierarchy) continue;
+            float distance = Vector3.Distance(cursor, snapPoint.transform.position);
+            if (distance > closestDistance) continue;
+            closestDistance = distance;
+            point = snapPoint.transform.position;
+            found = true;
+        }
+        return found;
+    }
+
+    /// <summary>Builds a dyke between two PlayMaker tutorial snap points.</summary>
+    public bool TryBuildTutorialDyke(Vector3 start, Vector3 end)
+    {
+        if (freePlacement || !CanBuildTutorialDyke(start, end)) return false;
+
+        startPoint = start;
+        endPoint = end;
+        int childCountBefore = transform.childCount;
+        if (!DrawNewDyke()) return false;
+
+        // Tutorial dykes normally receive their interaction from the XR ray.
+        // Give Gamepad-created tutorial dykes the same collider/marker path so
+        // the A button can remove them and PlayMaker still sees dykeDestroyed.
+        if (transform.childCount > childCountBefore)
+        {
+            GameObject dyke = transform.GetChild(transform.childCount - 1).gameObject;
+            AddMeshColliders(dyke);
+            if (dyke.GetComponent<A1P1ScenarioDyke>() == null)
+                dyke.AddComponent<A1P1ScenarioDyke>();
+        }
+        return true;
+    }
+
+    public bool CanBuildTutorialDyke(Vector3 start, Vector3 end)
+    {
+        return !freePlacement && HorizontalDistance(start, end) > .05f;
+    }
+
+    /// <summary>Finds a participant dyke close to a terrain cursor point.</summary>
+    public A1P1ScenarioDyke FindFreePlacementDykeAt(Vector3 point, float radius)
+    {
+        A1P1ScenarioDyke closest = null;
+        float closestDistance = float.MaxValue;
+        float safeRadius = Mathf.Max(0.01f, radius);
+        foreach (A1P1ScenarioDyke dyke in GetComponentsInChildren<A1P1ScenarioDyke>(true))
+        {
+            if (dyke == null || !dyke.gameObject.activeInHierarchy) continue;
+            Collider[] colliders = dyke.GetComponentsInChildren<Collider>(true);
+            foreach (Collider collider in colliders)
+            {
+                if (collider == null || !collider.enabled) continue;
+                Vector3 closestPoint = collider.ClosestPoint(point);
+                float distance = Vector3.Distance(point, closestPoint);
+                if (distance <= safeRadius && distance < closestDistance)
+                {
+                    closest = dyke;
+                    closestDistance = distance;
+                }
+            }
+        }
+        return closest;
+    }
+
+    /// <summary>Returns a tutorial or participant dyke under a Gamepad cursor.</summary>
+    public GameObject FindGamepadDykeAt(Vector3 point, float radius)
+    {
+        A1P1ScenarioDyke participantDyke = FindFreePlacementDykeAt(point, radius);
+        if (participantDyke != null) return participantDyke.gameObject;
+        return IsNearDyke(dykeToDestroy, point, radius) ? dykeToDestroy : null;
+    }
+
+    /// <summary>Destroys a dyke selected by the Gamepad A button.</summary>
+    public bool TryDestroyGamepadDyke(GameObject target)
+    {
+        if (target == null) return false;
+        A1P1ScenarioDyke participantDyke = target.GetComponentInParent<A1P1ScenarioDyke>();
+        if (participantDyke != null) return TryDestroyFreePlacementDyke(participantDyke);
+        if (dykeToDestroy == null ||
+            (target != dykeToDestroy && !target.transform.IsChildOf(dykeToDestroy.transform))) return false;
+
+        dykeDestroyed++;
+        FloodStudyLogger.RecordDykeDestroyed(target.GetComponentInParent<ScenarioDykeLength>());
+        FloodAudio.PlayDykeRemoved();
+        Destroy(dykeToDestroy);
+        dykeToDestroy = null;
+        return true;
+    }
+
+    /// <summary>Destroys a participant dyke and records the removal.</summary>
+    public bool TryDestroyFreePlacementDyke(A1P1ScenarioDyke scenarioDyke)
+    {
+        if (scenarioDyke == null) return false;
+        SetHoveredScenarioDyke(null);
+        FloodStudyLogger.RecordDykeDestroyed(scenarioDyke.GetComponent<ScenarioDykeLength>());
+        FloodAudio.PlayDykeRemoved();
+        Destroy(scenarioDyke.gameObject);
+        dykeDestroyed++;
+        return true;
+    }
+
+    static bool IsNearDyke(GameObject target, Vector3 point, float radius)
+    {
+        if (target == null || !target.activeInHierarchy) return false;
+        float safeRadius = Mathf.Max(.01f, radius);
+        Collider[] colliders = target.GetComponentsInChildren<Collider>(true);
+        foreach (Collider collider in colliders)
+            if (collider != null && collider.enabled &&
+                Vector3.Distance(point, collider.ClosestPoint(point)) <= safeRadius)
+                return true;
+        Renderer[] renderers = target.GetComponentsInChildren<Renderer>(true);
+        foreach (Renderer renderer in renderers)
+            if (renderer != null && renderer.bounds.SqrDistance(point) <= safeRadius * safeRadius)
+                return true;
+        return false;
+    }
+
+    bool DrawNewDyke()
     {
         Vector3 fullDirection = endPoint - startPoint;
         Vector3 horizontalDirection = new Vector3(fullDirection.x, 0f, fullDirection.z);
         float horizontalDistance = horizontalDirection.magnitude;
         if (horizontalDistance < 0.0001f)
         {
-            return;
+            return false;
         }
 
-        int currentDykeCount = GetComponentsInChildren<A1P1ScenarioDyke>(true).Length;
-        if (freePlacement && maxFreePlacementDykes > 0 && currentDykeCount >= maxFreePlacementDykes)
-            return;
-        if (freePlacement && minFreePlacementDykeLengthMeters > 0f &&
-            horizontalDistance < minFreePlacementDykeLengthMeters)
-            return;
-        if (freePlacement && maxFreePlacementDykeLengthMeters > 0f &&
-            horizontalDistance > maxFreePlacementDykeLengthMeters)
-            return;
-        if (freePlacement && maxTotalFreePlacementDykeLengthMeters > 0f &&
-            CurrentFreePlacementLengthMeters() + horizontalDistance > maxTotalFreePlacementDykeLengthMeters)
-            return;
+        if (freePlacement && !CanBuildFreePlacementDyke(startPoint, endPoint))
+            return false;
+
+        if (dykePrefab == null)
+        {
+            Debug.LogError("DykeManagerTutorial has no dyke prefab assigned.", this);
+            return false;
+        }
 
         GameObject dyke = Instantiate(dykePrefab, transform);
         dyke.transform.position = (startPoint + endPoint) / 2;
@@ -408,6 +567,7 @@ public class DykeManagerTutorial : MonoBehaviour
 
         dykeBuilt++;
         FloodAudio.PlayDykeBuilt();
+        return true;
     }
 
     static float HorizontalDistance(Vector3 start, Vector3 end)
@@ -419,6 +579,7 @@ public class DykeManagerTutorial : MonoBehaviour
 
     Vector3 SnapToTerrainEdge(Vector3 point)
     {
+        EnsurePlacementTerrainReference();
         if (!freePlacement || terrainEdgeSnapDistanceMeters <= 0f || placementTerrainRenderer == null)
             return point;
 
@@ -462,6 +623,22 @@ public class DykeManagerTutorial : MonoBehaviour
             point.y = edgeHit.point.y;
 
         return point;
+    }
+
+    void EnsurePlacementTerrainReference()
+    {
+        if (placementTerrain != null && placementTerrainRenderer != null) return;
+
+        foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+        foreach (Transform child in root.GetComponentsInChildren<Transform>(true))
+        {
+            if (!string.Equals(child.name, "SM_Tutorial_Terrain_01", System.StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            placementTerrain = child;
+            placementTerrainRenderer = child.GetComponentInChildren<Renderer>(true);
+            return;
+        }
     }
 
     void EnsureFutureLengthLabel()
