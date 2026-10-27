@@ -334495,9 +334495,17 @@ MonoBehaviour:
   gamepadLocalPosition: {x: 0, y: 0, z: 0}
   gamepadLocalEulerAngles: {x: 0, y: 0, z: 0}
   gamepadLocalScale: 1
-  movementRoot: {fileID: 6249814640838633107}
+  rayLocalPosition: {x: -0.05, y: 0, z: 0}
+  rayLocalEulerAngles: {x: -90, y: 0, z: 0}
+  rayLength: 20
+  rayYawSpeed: 110
+  rayPitchSpeed: 90
+  minimumRayPitch: -70
+  maximumRayPitch: 70
+  stickDeadzone: 0.12
+  rayWidth: 0.008
+  rayColor: {r: 0.15, g: 1, b: 0.35, a: 1}
   forwardBackwardSpeed: 5
   verticalSpeed: 2
   minimumHeight: 0
   maximumHeight: 150
-  stickDeadzone: 0.12

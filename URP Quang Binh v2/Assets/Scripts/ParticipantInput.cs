@@ -92,10 +92,17 @@ public static class ParticipantInput
         return leftGrip.IsPressed();
     }
 
-    /// <summary>Left-stick movement while the left grip is held.</summary>
+    public static bool RightGripIsPressed()
+    {
+        if (!IsGamepadParticipant) return false;
+        EnsureEnabled();
+        return rightGrip.IsPressed();
+    }
+
+    /// <summary>Reads the Quest left thumbstick for locomotion.</summary>
     public static Vector2 ReadGamepadMoveStick()
     {
-        if (!IsGamepadParticipant || !LeftGripIsPressed()) return Vector2.zero;
+        if (!IsGamepadParticipant) return Vector2.zero;
         EnsureEnabled();
         return leftStick.ReadValue<Vector2>();
     }
@@ -106,6 +113,12 @@ public static class ParticipantInput
         if (!IsGamepadParticipant) return Vector2.zero;
         EnsureEnabled();
         return rightStick.ReadValue<Vector2>();
+    }
+
+    /// <summary>Reads the Quest right thumbstick for the virtual ray.</summary>
+    public static Vector2 ReadGamepadRightStick()
+    {
+        return ReadGamepadRayLook();
     }
 
     /// <summary>Creates an XRI reader backed by the Quest right trigger.</summary>

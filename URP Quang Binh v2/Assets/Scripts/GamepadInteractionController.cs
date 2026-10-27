@@ -8,8 +8,8 @@ using UnityEngine.XR.Interaction.Toolkit.Interactors;
 /// <summary>
 /// Turns the Quest 3 controllers into the participant Gamepad condition.
 /// The GAMEPAD model replaces the left controller model and the right
-/// controller model is hidden. While the left grip is held, the left stick
-/// moves the XR Origin: Y moves forward/backward and X moves up/down.
+/// controller model is hidden. The right Quest thumbstick steers one visual
+/// ray that starts at the center of the GAMEPAD model.
 ///
 /// The normal XR ray, poke, near/far and direct interactors are disabled for
 /// this condition. They are restored if the condition is disabled again.
@@ -17,21 +17,37 @@ using UnityEngine.XR.Interaction.Toolkit.Interactors;
 [DefaultExecutionOrder(-100)]
 public sealed class GamepadInteractionController : MonoBehaviour
 {
+    public bool IsGamepadRayActive => gamepadModeActive && rayOrigin != null;
+    public Transform GamepadRayOrigin => rayOrigin;
+
     [Header("Gamepad visual")]
     [SerializeField] Transform gamepadPrefab;
     [SerializeField] Vector3 gamepadLocalPosition;
     [SerializeField] Vector3 gamepadLocalEulerAngles;
     [Min(.01f)] [SerializeField] float gamepadLocalScale = 1f;
 
-    [Header("Quest Gamepad movement")]
-    [SerializeField] Transform movementRoot;
+    [Header("Quest Gamepad ray")]
+    [SerializeField] Vector3 rayLocalPosition = new Vector3(-0.05f, 0f, 0f);
+    // The GAMEPAD model's forward axis is its local +Y axis. Rotating the
+    // ray -90 degrees around X makes the initial ray leave the model forward.
+    [SerializeField] Vector3 rayLocalEulerAngles = new Vector3(-90f, 0f, 0f);
+    [Min(0.1f)] [SerializeField] float rayLength = 20f;
+    [Min(1f)] [SerializeField] float rayYawSpeed = 110f;
+    [Min(1f)] [SerializeField] float rayPitchSpeed = 90f;
+    [SerializeField] float minimumRayPitch = -70f;
+    [SerializeField] float maximumRayPitch = 70f;
+    [Range(0f, .5f)] [SerializeField] float stickDeadzone = .12f;
+    [Min(.001f)] [SerializeField] float rayWidth = .008f;
+    [SerializeField] Color rayColor = new Color(.15f, 1f, .35f, 1f);
+
+    [Header("Gamepad locomotion")]
     [Min(0f)] [SerializeField] float forwardBackwardSpeed = 5f;
     [Min(0f)] [SerializeField] float verticalSpeed = 2f;
     [SerializeField] float minimumHeight;
     [SerializeField] float maximumHeight = 150f;
-    [Range(0f, .5f)] [SerializeField] float stickDeadzone = .12f;
 
     GameObject gamepadVisual;
+    Transform movementRoot;
     ActionBasedController leftController;
     ActionBasedController rightController;
     Transform originalLeftModel;
@@ -41,6 +57,10 @@ public sealed class GamepadInteractionController : MonoBehaviour
     bool originalLeftModelHidden;
     bool originalRightModelHidden;
     bool gamepadModeActive;
+    Transform rayOrigin;
+    LineRenderer gamepadRay;
+    float rayYaw;
+    float rayPitch;
 
     readonly List<GameObject> disabledInteractorObjects = new List<GameObject>();
     readonly List<Behaviour> disabledLegacyMovement = new List<Behaviour>();
@@ -48,11 +68,8 @@ public sealed class GamepadInteractionController : MonoBehaviour
     void Awake()
     {
         rightController = GetComponent<ActionBasedController>();
-        if (movementRoot == null)
-        {
-            XROrigin origin = FindFirstObjectByType<XROrigin>();
-            movementRoot = origin != null ? origin.transform : transform.root;
-        }
+        XROrigin origin = FindFirstObjectByType<XROrigin>();
+        movementRoot = origin != null ? origin.transform : transform.root;
     }
 
     void Update()
@@ -64,8 +81,17 @@ public sealed class GamepadInteractionController : MonoBehaviour
             else DisableGamepadMode();
         }
 
-        if (gamepadModeActive)
+        if (!gamepadModeActive)
+            return;
+
+        bool rightGripHeld = ParticipantInput.RightGripIsPressed();
+        if (rightGripHeld)
+            UpdateGamepadRay();
+        else
+        {
+            HideGamepadRay();
             UpdateGamepadMovement();
+        }
     }
 
     void EnableGamepadMode()
@@ -87,9 +113,13 @@ public sealed class GamepadInteractionController : MonoBehaviour
         RestoreRightQuestControllerModel();
         RestoreLeftQuestControllerModel();
 
+        if (gamepadRay != null && gamepadRay.material != null)
+            Destroy(gamepadRay.material);
         if (gamepadVisual != null)
             Destroy(gamepadVisual);
         gamepadVisual = null;
+        rayOrigin = null;
+        gamepadRay = null;
     }
 
     void DisableLegacyInteractions()
@@ -162,9 +192,46 @@ public sealed class GamepadInteractionController : MonoBehaviour
         disabledLegacyMovement.Clear();
     }
 
+    void UpdateGamepadRay()
+    {
+        if (rayOrigin == null)
+            return;
+
+        if (gamepadRay != null)
+            gamepadRay.enabled = true;
+
+        Vector2 stick = ParticipantInput.ReadGamepadRightStick();
+        if (stick.sqrMagnitude < stickDeadzone * stickDeadzone)
+            return;
+
+        // Make the ray four-directional. A small diagonal component is
+        // ignored, so up is only up, down only down, left only left, and
+        // right only right.
+        if (Mathf.Abs(stick.x) > Mathf.Abs(stick.y))
+            stick = new Vector2(Mathf.Sign(stick.x), 0f);
+        else
+            stick = new Vector2(0f, Mathf.Sign(stick.y));
+
+        // Invert the local model axes so right/up on the thumbsticks move the
+        // visible ray right/up instead of mirrored left/down.
+        rayYaw -= stick.x * rayYawSpeed * Time.unscaledDeltaTime;
+        rayPitch = Mathf.Clamp(rayPitch + stick.y * rayPitchSpeed * Time.unscaledDeltaTime,
+            minimumRayPitch, maximumRayPitch);
+        rayOrigin.localRotation = Quaternion.Euler(rayPitch, rayYaw, 0f) *
+                                  Quaternion.Euler(rayLocalEulerAngles);
+    }
+
+    void HideGamepadRay()
+    {
+        if (gamepadRay != null)
+            gamepadRay.enabled = false;
+    }
+
     void UpdateGamepadMovement()
     {
-        if (movementRoot == null || !ParticipantInput.LeftGripIsPressed())
+        if (gamepadRay != null)
+            gamepadRay.enabled = false;
+        if (movementRoot == null)
             return;
 
         Vector2 stick = ParticipantInput.ReadGamepadMoveStick();
@@ -179,16 +246,15 @@ public sealed class GamepadInteractionController : MonoBehaviour
         forward.y = 0f;
         forward.Normalize();
 
-        // Use the dominant stick axis so a slightly diagonal input does not
-        // combine forward movement with flying. Y is forward/backward; X is
-        // up/down, matching the Quest controller movement configuration.
+        // Keep the two movement directions separate. A slight diagonal input
+        // therefore does not combine forward movement with flying.
         Vector3 movement;
         if (Mathf.Abs(stick.y) >= Mathf.Abs(stick.x))
             movement = forward * (stick.y * forwardBackwardSpeed);
         else
             movement = Vector3.up * (stick.x * verticalSpeed);
-        movementRoot.position += movement * Time.unscaledDeltaTime;
 
+        movementRoot.position += movement * Time.unscaledDeltaTime;
         Vector3 position = movementRoot.position;
         position.y = Mathf.Clamp(position.y, minimumHeight, maximumHeight);
         movementRoot.position = position;
@@ -250,6 +316,32 @@ public sealed class GamepadInteractionController : MonoBehaviour
         gamepadVisual.transform.localScale *= gamepadLocalScale;
         leftController.model = instance;
         leftController.hideControllerModel = false;
+        CreateGamepadRay(instance);
+    }
+
+    void CreateGamepadRay(Transform gamepadRoot)
+    {
+        GameObject rayObject = new GameObject("QuestGamepad_VisualRay");
+        rayObject.transform.SetParent(gamepadRoot, false);
+        rayOrigin = rayObject.transform;
+        rayOrigin.localPosition = rayLocalPosition;
+        rayOrigin.localRotation = Quaternion.Euler(rayLocalEulerAngles);
+
+        gamepadRay = rayObject.AddComponent<LineRenderer>();
+        gamepadRay.useWorldSpace = false;
+        gamepadRay.positionCount = 2;
+        gamepadRay.SetPosition(0, Vector3.zero);
+        gamepadRay.SetPosition(1, Vector3.forward * rayLength);
+        gamepadRay.startWidth = rayWidth;
+        gamepadRay.endWidth = rayWidth;
+        gamepadRay.startColor = rayColor;
+        gamepadRay.endColor = rayColor;
+        gamepadRay.numCapVertices = 4;
+
+        Shader shader = Shader.Find("Universal Render Pipeline/Unlit");
+        if (shader == null) shader = Shader.Find("Sprites/Default");
+        if (shader != null)
+            gamepadRay.material = new Material(shader);
     }
 
     void RestoreLeftQuestControllerModel()
