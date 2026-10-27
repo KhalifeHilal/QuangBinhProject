@@ -287313,6 +287313,7 @@ GameObject:
   - component: {fileID: 1150276723163521015}
   - component: {fileID: 4714331886476828489}
   - component: {fileID: 2144416439156517122}
+  - component: {fileID: 9000000000000000001}
   m_Layer: 2
   m_Name: Right Controller
   m_TagString: Untagged
@@ -334478,3 +334479,25 @@ SceneRoots:
   - {fileID: 2128300916}
   - {fileID: 613825920}
   - {fileID: 1212028690}
+--- !u!114 &9000000000000000001
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4714331886476828493}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8fb08f890f3a45b3ba0a9bf70f5b4e6e, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  gamepadPrefab: {fileID: 9176108553878510826, guid: 3233bed697733fa488054b16792e2cf7, type: 3}
+  gamepadLocalPosition: {x: 0, y: 0, z: 0}
+  gamepadLocalEulerAngles: {x: 0, y: 0, z: 0}
+  gamepadLocalScale: 1
+  movementRoot: {fileID: 6249814640838633107}
+  forwardBackwardSpeed: 5
+  verticalSpeed: 2
+  minimumHeight: 0
+  maximumHeight: 150
+  stickDeadzone: 0.12
