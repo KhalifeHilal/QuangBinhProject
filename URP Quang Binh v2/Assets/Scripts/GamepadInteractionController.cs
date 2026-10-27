@@ -94,6 +94,7 @@ public sealed class GamepadInteractionController : MonoBehaviour
         DisableLegacyMovement();
         GamepadUIInput.ResetSelection();
         gamepadModeActive = true;
+        GamepadUIInput.RefreshTutorialInstructions();
     }
 
     void DisableGamepadMode()

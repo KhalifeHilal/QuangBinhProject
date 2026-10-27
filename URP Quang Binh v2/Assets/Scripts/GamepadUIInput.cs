@@ -20,6 +20,12 @@ public static class GamepadUIInput
     static Canvas selectedCanvas;
     static float nextMoveTime;
 
+    // These two hints are authored in Tutorial_Scene as TextMeshPro labels.
+    // They are updated once when the participant switches to the Gamepad
+    // condition, so the tutorial still uses its original wording for the
+    // Quest-controller conditions without adding another per-frame scan.
+    static bool tutorialInstructionsUpdated;
+
     public static void Tick()
     {
         if (!ParticipantInput.IsGamepadParticipant)
@@ -38,6 +44,37 @@ public static class GamepadUIInput
 
         if (ParticipantInput.GamepadConfirmWasPressedThisFrame())
             Submit(eventSystem);
+    }
+
+    /// <summary>
+    /// Applies the Gamepad-specific wording to the two existing tutorial
+    /// instruction labels. The labels may be inactive while the check-in
+    /// panel is shown, therefore inactive objects are included in the search.
+    /// </summary>
+    public static void RefreshTutorialInstructions()
+    {
+        if (tutorialInstructionsUpdated || !ParticipantInput.IsGamepadParticipant)
+            return;
+
+        TMP_Text[] labels = UnityEngine.Object.FindObjectsByType<TMP_Text>(
+            FindObjectsInactive.Include, FindObjectsSortMode.None);
+        foreach (TMP_Text label in labels)
+        {
+            if (label == null)
+                continue;
+
+            string text = label.text == null ? string.Empty : label.text.Trim();
+            if (string.Equals(text, "Use the right Joystick to move", StringComparison.OrdinalIgnoreCase))
+            {
+                label.text = "Use left stick to move";
+            }
+            else if (string.Equals(text, "Use the right trigger button to interact with interface", StringComparison.OrdinalIgnoreCase))
+            {
+                label.text = "Press B to start";
+            }
+        }
+
+        tutorialInstructionsUpdated = true;
     }
 
     /// <summary>
@@ -496,5 +533,6 @@ public static class GamepadUIInput
         selected = null;
         selectedCanvas = null;
         nextMoveTime = 0f;
+        tutorialInstructionsUpdated = false;
     }
 }
