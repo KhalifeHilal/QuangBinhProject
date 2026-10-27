@@ -28,7 +28,10 @@ public sealed class FloodScenarioQuizPanel : MonoBehaviour
     Action repeatScenario;
     Action<int> answerSubmitted;
     Action confidenceCompleted;
+    Action<int> confidenceConfirmedBeforeFeedback;
+    int recordedConfidence;
     bool confidenceOnly;
+    bool feedbackOnly;
 
     static bool UseB => ParticipantSession.IsCheckedIn &&
                         ParticipantSession.QuestionSet == ParticipantQuestionSet.B;
@@ -53,13 +56,28 @@ public sealed class FloodScenarioQuizPanel : MonoBehaviour
         return ShowConfidence(answer, null);
     }
 
-    public static FloodScenarioQuizPanel ShowConfidence(int answer, Action onCompleted)
+    public static FloodScenarioQuizPanel ShowConfidence(int answer, Action onCompleted,
+        Action<int> onConfirmedBeforeFeedback = null)
     {
         GameObject root = new GameObject("Confidence_A1_P1", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(TrackedDeviceGraphicRaycaster));
         FloodScenarioQuizPanel panel = root.AddComponent<FloodScenarioQuizPanel>();
         panel.selectedAnswer = answer;
         panel.confidenceCompleted = onCompleted;
+        panel.confidenceConfirmedBeforeFeedback = onConfirmedBeforeFeedback;
         panel.confidenceOnly = true;
+        panel.Build();
+        FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.25f);
+        return panel;
+    }
+
+    public static FloodScenarioQuizPanel ShowFeedback(int answer, int confidence, Action onCompleted)
+    {
+        GameObject root = new GameObject("Feedback_A1_P1", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(TrackedDeviceGraphicRaycaster));
+        FloodScenarioQuizPanel panel = root.AddComponent<FloodScenarioQuizPanel>();
+        panel.selectedAnswer = answer;
+        panel.recordedConfidence = confidence;
+        panel.confidenceCompleted = onCompleted;
+        panel.feedbackOnly = true;
         panel.Build();
         FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.25f);
         return panel;
@@ -96,10 +114,11 @@ public sealed class FloodScenarioQuizPanel : MonoBehaviour
         FloodLearningUI.Button("RepeatScenario", questionGroup.transform, "Repeat scenario", -965, 82, 29, RepeatScenario, 390);
         BuildConfidenceStep();
         BuildFeedbackStep();
-        questionGroup.SetActive(!confidenceOnly);
-        confidenceGroup.SetActive(confidenceOnly);
-        feedbackGroup.SetActive(false);
+        questionGroup.SetActive(!confidenceOnly && !feedbackOnly);
+        confidenceGroup.SetActive(confidenceOnly && !feedbackOnly);
+        feedbackGroup.SetActive(feedbackOnly);
         if (confidenceOnly) UpdateConfidenceText(confidenceSlider.value);
+        if (feedbackOnly) UpdateFeedbackResult(recordedConfidence);
     }
 
     Button CreateAnswerButton(int index, float top) => FloodLearningUI.Button($"Answer_{(char)('A' + index)}", questionGroup.transform, CurrentAnswers[index], top, 102, 27, () => SelectAnswer(index));
@@ -173,12 +192,27 @@ public sealed class FloodScenarioQuizPanel : MonoBehaviour
     {
         int confidence = Mathf.RoundToInt(confidenceSlider.value) * 20;
         FloodStudyLogger.RecordConfidence(confidence);
+        if (confidenceConfirmedBeforeFeedback != null)
+        {
+            Action<int> callback = confidenceConfirmedBeforeFeedback;
+            confidenceConfirmedBeforeFeedback = null;
+            Destroy(gameObject);
+            callback.Invoke(confidence);
+            return;
+        }
+
         confidenceGroup.SetActive(false);
         feedbackGroup.SetActive(true);
-        TMP_Text result = feedbackGroup.transform.Find("Result").GetComponent<TMP_Text>();
+        UpdateFeedbackResult(confidence);
+        Debug.Log($"{SessionPrefix}-P1 result: answer={(char)('A' + selectedAnswer)}, correct={selectedAnswer == CorrectAnswerIndex}, confidence={confidence}");
+    }
+
+    void UpdateFeedbackResult(int confidence)
+    {
+        TMP_Text result = feedbackGroup.transform.Find("Result")?.GetComponent<TMP_Text>();
+        if (result == null) return;
         result.text = selectedAnswer == CorrectAnswerIndex ? $"Correct!  |  Confidence: {confidence}%" : $"Your answer: {(char)('A' + selectedAnswer)}  |  Confidence: {confidence}%";
         result.color = selectedAnswer == CorrectAnswerIndex ? new Color(.4f, 1, .55f) : new Color(1, .68f, .35f);
-        Debug.Log($"{SessionPrefix}-P1 result: answer={(char)('A' + selectedAnswer)}, correct={selectedAnswer == CorrectAnswerIndex}, confidence={confidence}");
     }
 
     void ContinueAfterFeedback()

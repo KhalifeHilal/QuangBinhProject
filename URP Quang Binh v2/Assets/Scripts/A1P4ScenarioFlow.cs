@@ -30,6 +30,7 @@ public sealed class A1P4ScenarioFlow : MonoBehaviour
     TerrainFloodSimulation simulation;
     float viewingDuration, floodDuration, elapsed;
     int selectedAnswer = -1;
+    int selectedConfidence = -1;
     Phase phase;
 
     void Awake()
@@ -94,6 +95,16 @@ public sealed class A1P4ScenarioFlow : MonoBehaviour
     {
         selectedAnswer = answer;
         FloodStudyLogger.RecordAnswer(answer);
+        phase = Phase.Confidence;
+        A1P4Panel.ShowConfidence(selectedAnswer, null, confidence =>
+        {
+            selectedConfidence = confidence;
+            BeginDykeBuildingAfterConfidence();
+        });
+    }
+
+    void BeginDykeBuildingAfterConfidence()
+    {
         FloodStudyLogger.BeginBuildingPhase();
         Cleanup(ref preview);
         SetDykeConstruction(true, maxDykes, minDykeLengthMeters, maxDykeLengthMeters, 0f);
@@ -136,7 +147,7 @@ public sealed class A1P4ScenarioFlow : MonoBehaviour
         // the confidence and written-feedback screens. They are cleaned up
         // after the separate feedback scenario.
         phase = Phase.Confidence;
-        A1P4Panel.ShowConfidence(selectedAnswer, StartFeedbackScenario);
+        A1P4Panel.ShowFeedback(selectedAnswer, selectedConfidence, StartFeedbackScenario);
     }
 
     void StartFeedbackScenario()
@@ -469,7 +480,8 @@ static class A1P4Panel
         FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.25f);
     }
 
-    public static void ShowConfidence(int answer, Action onCompleted = null)
+    public static void ShowConfidence(int answer, Action onCompleted = null,
+        Action<int> onConfirmedBeforeFeedback = null)
     {
         GameObject root = P2Panel.CanvasRoot("Confidence_A1_P4", new Vector2(1500, 1080));
         GameObject group = FloodLearningUI.Group("ConfidenceGroup", root.transform);
@@ -489,8 +501,23 @@ static class A1P4Panel
             {
                 int confidence = Mathf.RoundToInt(slider.value) * 20;
                 FloodStudyLogger.RecordConfidence(confidence);
-                ShowFeedback(root, answer, confidence, onCompleted);
+                if (onConfirmedBeforeFeedback != null)
+                {
+                    UnityEngine.Object.Destroy(root);
+                    onConfirmedBeforeFeedback(confidence);
+                }
+                else
+                {
+                    ShowFeedback(root, answer, confidence, onCompleted);
+                }
             }, 420);
+        FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.25f);
+    }
+
+    public static void ShowFeedback(int answer, int confidence, Action onCompleted)
+    {
+        GameObject root = P2Panel.CanvasRoot("Feedback_A1_P4", new Vector2(1500, 1080));
+        ShowFeedback(root, answer, confidence, onCompleted);
         FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.25f);
     }
 

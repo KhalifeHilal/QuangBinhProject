@@ -24,6 +24,7 @@ public sealed class PlayMakerTerrainFloodScenario03 : MonoBehaviour
     GameObject observationHint;
     GameObject waterDirectionHint;
     int selectedAnswer = -1;
+    int selectedConfidence = -1;
     Phase phase;
     // The normal PlayMaker tutorial path reaches A1-P1 from Etat 12 rather
     // than through BeginAfterTutorial. Keep an explicit guard so the scenario
@@ -141,6 +142,16 @@ public sealed class PlayMakerTerrainFloodScenario03 : MonoBehaviour
         activeScenario = null;
         ClearDykeManagerChildren();
         SetDykeConstruction(false, true);
+        phase = Phase.Confidence;
+        FloodScenarioQuizPanel.ShowConfidence(selectedAnswer, null, confidence =>
+        {
+            selectedConfidence = confidence;
+            PrepareSimulationAfterConfidence();
+        });
+    }
+
+    void PrepareSimulationAfterConfidence()
+    {
         // A1-P1 deliberately has no participant building phase. Still record
         // a zero-length phase and its top-down image so its log has the same
         // build_end/simulation_end evidence as the other scenarios.
@@ -189,7 +200,7 @@ public sealed class PlayMakerTerrainFloodScenario03 : MonoBehaviour
         ClearDykeManagerChildren();
         SetA1P1Houses(false);
         phase = Phase.Confidence;
-        FloodScenarioQuizPanel.ShowConfidence(selectedAnswer, StartA1P2);
+        FloodScenarioQuizPanel.ShowFeedback(selectedAnswer, selectedConfidence, StartA1P2);
     }
 
     void StartA1P2()
