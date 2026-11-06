@@ -91,13 +91,20 @@ public sealed class A1P5ScenarioFlow : MonoBehaviour
         Cleanup(ref previewHint);
         FloodStudyLogger.EndObservation();
         phase = Phase.Question;
-        A1P5Panel.ShowQuestion(StartPreview, BeginDykeBuilding);
+        A1P5Panel.ShowQuestion(StartPreview, BeginConfidence);
+    }
+
+    void BeginConfidence(int answer)
+    {
+        selectedAnswer = answer;
+        FloodStudyLogger.RecordAnswer(answer);
+        phase = Phase.Confidence;
+        A1P5Panel.ShowConfidenceBeforeBuild(answer, () => BeginDykeBuilding(answer));
     }
 
     void BeginDykeBuilding(int answer)
     {
         selectedAnswer = answer;
-        FloodStudyLogger.RecordAnswer(answer);
         FloodStudyLogger.BeginBuildingPhase();
         Cleanup(ref preview);
         // Hide the authored strategy dykes and their labels before the
@@ -143,7 +150,7 @@ public sealed class A1P5ScenarioFlow : MonoBehaviour
         // the confidence and written-feedback screens. They are cleaned up
         // after the separate feedback scenario.
         phase = Phase.Confidence;
-        A1P5Panel.ShowConfidence(selectedAnswer, StartFeedbackScenario);
+        A1P5Panel.ShowFeedbackOnly(selectedAnswer, StartFeedbackScenario);
     }
 
     void StartFeedbackScenario()
@@ -307,6 +314,7 @@ public sealed class A1P5ScenarioFlow : MonoBehaviour
 
 static class A1P5Panel
 {
+    static int lastConfidence = -1;
     static readonly string[] AnswersA =
     {
         "A) Strategy A, with 2 buildings protected by a 1.5 m barrier.",
@@ -371,6 +379,16 @@ static class A1P5Panel
 
     public static void ShowConfidence(int answer, Action onCompleted = null)
     {
+        ShowConfidenceInternal(answer, onCompleted, true);
+    }
+
+    public static void ShowConfidenceBeforeBuild(int answer, Action onCompleted)
+    {
+        ShowConfidenceInternal(answer, onCompleted, false);
+    }
+
+    static void ShowConfidenceInternal(int answer, Action onCompleted, bool showFeedbackAfterConfirm)
+    {
         GameObject root = P2Panel.CanvasRoot("Confidence_A1_P5", new Vector2(1500, 1080));
         GameObject group = FloodLearningUI.Group("ConfidenceGroup", root.transform);
         FloodLearningUI.Text("Question", group.transform, "How confident are you in your answer?", 42, FontStyles.Bold, -150, 70, TextAlignmentOptions.Center, 80);
@@ -388,9 +406,23 @@ static class A1P5Panel
             () =>
             {
                 int confidence = Mathf.RoundToInt(slider.value) * 20;
+                lastConfidence = confidence;
                 FloodStudyLogger.RecordConfidence(confidence);
+                if (!showFeedbackAfterConfirm)
+                {
+                    UnityEngine.Object.Destroy(root);
+                    onCompleted?.Invoke();
+                    return;
+                }
                 ShowFeedback(root, answer, confidence, onCompleted);
             }, 420);
+        FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.25f);
+    }
+
+    public static void ShowFeedbackOnly(int answer, Action onCompleted)
+    {
+        GameObject root = P2Panel.CanvasRoot("Feedback_A1_P5", new Vector2(1500, 1080));
+        ShowFeedback(root, answer, lastConfidence, onCompleted);
         FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.25f);
     }
 
@@ -404,8 +436,9 @@ static class A1P5Panel
         string explanation = UseB
             ? "Strategy A protects about 1.3 buildings per metre, Strategy B protects 2, and Strategy C protects about 1.6. Strategy B is therefore the most resource-efficient."
             : "Strategy A: 2 / 1.5 = about 1.3 buildings/m\nStrategy B: 3 / 1.5 = 2 buildings/m\nStrategy C: 4 / 2.5 = about 1.6 buildings/m\n\nStrategy B provides the highest protection per metre of barrier, even though Strategy C protects more buildings in total. This makes Strategy B the most resource-efficient placement strategy.";
+        string confidenceSuffix = confidence >= 0 ? $"  |  Confidence: {confidence}%" : string.Empty;
         TMP_Text result = FloodLearningUI.Text("Result", root.transform,
-            answer == CorrectAnswerIndex ? $"Correct!  |  Confidence: {confidence}%" : $"Your answer: {(char)('A' + answer)}  |  Confidence: {confidence}%",
+            answer == CorrectAnswerIndex ? $"Correct!{confidenceSuffix}" : $"Your answer: {(char)('A' + answer)}{confidenceSuffix}",
             39, FontStyles.Bold, -105, 62, TextAlignmentOptions.Center, 65);
         result.color = answer == CorrectAnswerIndex ? new Color(.4f, 1f, .55f) : new Color(1f, .68f, .35f);
         FloodLearningUI.Text("Correct", root.transform,

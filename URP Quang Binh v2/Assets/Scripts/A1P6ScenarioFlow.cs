@@ -102,13 +102,20 @@ public sealed class A1P6ScenarioFlow : MonoBehaviour
         Cleanup(ref previewHint);
         FloodStudyLogger.EndObservation();
         phase = Phase.Question;
-        A1P6Panel.ShowQuestion(StartPreview, BeginDykeBuilding);
+        A1P6Panel.ShowQuestion(StartPreview, BeginConfidence);
+    }
+
+    void BeginConfidence(int answer)
+    {
+        selectedAnswer = answer;
+        FloodStudyLogger.RecordAnswer(answer);
+        phase = Phase.Confidence;
+        A1P6Panel.ShowConfidenceBeforeBuild(answer, () => BeginDykeBuilding(answer));
     }
 
     void BeginDykeBuilding(int answer)
     {
         selectedAnswer = answer;
-        FloodStudyLogger.RecordAnswer(answer);
         FloodStudyLogger.BeginBuildingPhase();
         Cleanup(ref preview);
         SetDykeConstruction(true, maxDykes, maxTotalDykeLengthMeters);
@@ -151,7 +158,7 @@ public sealed class A1P6ScenarioFlow : MonoBehaviour
         // the confidence and written-feedback screens. They are cleaned up
         // after the separate feedback scenario.
         phase = Phase.Confidence;
-        A1P6Panel.ShowConfidence(selectedAnswer, StartFeedbackScenario);
+        A1P6Panel.ShowFeedbackOnly(selectedAnswer, StartFeedbackScenario);
     }
 
     void StartFeedbackScenario()
@@ -303,6 +310,7 @@ public sealed class A1P6ScenarioFlow : MonoBehaviour
 
 static class A1P6Panel
 {
+    static int lastConfidence = -1;
     static readonly string[] AnswersA =
     {
         "A) Protecting one area removes the need to examine the rest of the system.",
@@ -369,6 +377,16 @@ static class A1P6Panel
 
     public static void ShowConfidence(int answer, Action onCompleted = null)
     {
+        ShowConfidenceInternal(answer, onCompleted, true);
+    }
+
+    public static void ShowConfidenceBeforeBuild(int answer, Action onCompleted)
+    {
+        ShowConfidenceInternal(answer, onCompleted, false);
+    }
+
+    static void ShowConfidenceInternal(int answer, Action onCompleted, bool showFeedbackAfterConfirm)
+    {
         GameObject root = P2Panel.CanvasRoot("Confidence_A1_P6", new Vector2(1500, 1080));
         GameObject group = FloodLearningUI.Group("ConfidenceGroup", root.transform);
         FloodLearningUI.Text("Question", group.transform, "How confident are you in your answer?", 42, FontStyles.Bold, -150, 70, TextAlignmentOptions.Center, 80);
@@ -386,9 +404,23 @@ static class A1P6Panel
             () =>
             {
                 int confidence = Mathf.RoundToInt(slider.value) * 20;
+                lastConfidence = confidence;
                 FloodStudyLogger.RecordConfidence(confidence);
+                if (!showFeedbackAfterConfirm)
+                {
+                    UnityEngine.Object.Destroy(root);
+                    onCompleted?.Invoke();
+                    return;
+                }
                 ShowFeedback(root, answer, confidence, onCompleted);
             }, 420);
+        FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.25f);
+    }
+
+    public static void ShowFeedbackOnly(int answer, Action onCompleted)
+    {
+        GameObject root = P2Panel.CanvasRoot("Feedback_A1_P6", new Vector2(1500, 1080));
+        ShowFeedback(root, answer, lastConfidence, onCompleted);
         FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.25f);
     }
 
@@ -402,8 +434,9 @@ static class A1P6Panel
         string explanation = UseB
             ? "Flood protection must be evaluated for the whole system. A barrier can change water storage and redirect risk to another area."
             : "Flood protection can change water storage and flow pathways. A barrier may protect one location but redirect or accumulate water in other areas.\n\nTherefore, the consequences for the whole system must be considered; not only the protected area.";
+        string confidenceSuffix = confidence >= 0 ? $"  |  Confidence: {confidence}%" : string.Empty;
         TMP_Text result = FloodLearningUI.Text("Result", root.transform,
-            answer == CorrectAnswerIndex ? $"Correct!  |  Confidence: {confidence}%" : $"Your answer: {(char)('A' + answer)}  |  Confidence: {confidence}%",
+            answer == CorrectAnswerIndex ? $"Correct!{confidenceSuffix}" : $"Your answer: {(char)('A' + answer)}{confidenceSuffix}",
             39, FontStyles.Bold, -105, 62, TextAlignmentOptions.Center, 65);
         result.color = answer == CorrectAnswerIndex ? new Color(.4f, 1f, .55f) : new Color(1f, .68f, .35f);
         FloodLearningUI.Text("Correct", root.transform,

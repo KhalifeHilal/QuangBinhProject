@@ -49,6 +49,7 @@ Material:
     - _Distance: 0
     - _Lightmapping: 1
     - _Outline: 0
+    - _OutlinePower: 3
     - _QueueControl: 0
     - _QueueOffset: 0
     - _Texture: 1
@@ -59,6 +60,7 @@ Material:
     - _Color2: {r: 0, g: 0, b: 0, a: 0}
     - _LightDirection: {r: -1.99, g: 0, b: 3.23, a: 0}
     - _Light_Direction: {r: 0, g: 0, b: 0, a: 0}
+    - _OutlineColor: {r: 1, g: 0, b: 0, a: 0}
     - _ShadowColor: {r: 0.3952029, g: 0.5074056, b: 0.7830189, a: 0}
     - _UV_Tiling: {r: 1, g: 1, b: 0, a: 0}
     - _VC_ColorBlend: {r: 1, g: 1, b: 1, a: 0}
@@ -76,4 +78,4 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d0353a89b1f911e48b9e16bdc9f2e058, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  version: 9
+  version: 10

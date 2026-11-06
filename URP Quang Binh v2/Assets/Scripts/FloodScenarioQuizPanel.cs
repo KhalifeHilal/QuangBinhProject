@@ -25,10 +25,13 @@ public sealed class FloodScenarioQuizPanel : MonoBehaviour
     Slider confidenceSlider;
     TMP_Text confidenceValue;
     int selectedAnswer = -1;
+    static int lastConfidence = -1;
     Action repeatScenario;
     Action<int> answerSubmitted;
+    Action<int> answerSelected;
     Action confidenceCompleted;
     bool confidenceOnly;
+    bool confidenceBeforeFlow;
 
     static bool UseB => ParticipantSession.IsCheckedIn &&
                         ParticipantSession.QuestionSet == ParticipantQuestionSet.B;
@@ -36,13 +39,14 @@ public sealed class FloodScenarioQuizPanel : MonoBehaviour
     static string[] CurrentAnswers => UseB ? AnswersB : AnswersA;
     static int CorrectAnswerIndex => UseB ? 3 : 1;
 
-    public static FloodScenarioQuizPanel Show(Action onRepeatScenario, Action<int> onAnswerSubmitted)
+    public static FloodScenarioQuizPanel Show(Action onRepeatScenario, Action<int> onAnswerSubmitted, Action<int> onAnswerSelected = null)
     {
         FloodAudio.PlayQuestion();
         GameObject root = new GameObject("Quiz_A1_P1", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(TrackedDeviceGraphicRaycaster));
         FloodScenarioQuizPanel panel = root.AddComponent<FloodScenarioQuizPanel>();
         panel.repeatScenario = onRepeatScenario;
         panel.answerSubmitted = onAnswerSubmitted;
+        panel.answerSelected = onAnswerSelected;
         panel.Build();
         FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.25f);
         return panel;
@@ -61,6 +65,21 @@ public sealed class FloodScenarioQuizPanel : MonoBehaviour
         panel.confidenceCompleted = onCompleted;
         panel.confidenceOnly = true;
         panel.Build();
+        FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.25f);
+        return panel;
+    }
+
+    public static FloodScenarioQuizPanel ShowFeedbackOnly(int answer, Action onCompleted)
+    {
+        GameObject root = new GameObject("Feedback_A1_P1", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(TrackedDeviceGraphicRaycaster));
+        FloodScenarioQuizPanel panel = root.AddComponent<FloodScenarioQuizPanel>();
+        panel.selectedAnswer = answer;
+        panel.confidenceCompleted = onCompleted;
+        panel.Build();
+        panel.questionGroup.SetActive(false);
+        panel.confidenceGroup.SetActive(false);
+        panel.feedbackGroup.SetActive(true);
+        panel.SetFeedbackResult(lastConfidence);
         FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.25f);
         return panel;
     }
@@ -147,8 +166,14 @@ public sealed class FloodScenarioQuizPanel : MonoBehaviour
         {
             Action<int> callback = answerSubmitted;
             answerSubmitted = null;
-            callback.Invoke(index);
-            Destroy(gameObject);
+            Action<int> selectedCallback = answerSelected;
+            answerSelected = null;
+            selectedCallback?.Invoke(index);
+            confidenceBeforeFlow = true;
+            confidenceCompleted = () => callback.Invoke(selectedAnswer);
+            questionGroup.SetActive(false);
+            confidenceGroup.SetActive(true);
+            UpdateConfidenceText(confidenceSlider.value);
             return;
         }
         questionGroup.SetActive(false);
@@ -175,13 +200,32 @@ public sealed class FloodScenarioQuizPanel : MonoBehaviour
     void ConfirmConfidence()
     {
         int confidence = Mathf.RoundToInt(confidenceSlider.value) * 20;
+        lastConfidence = confidence;
         FloodStudyLogger.RecordConfidence(confidence);
+        if (confidenceBeforeFlow)
+        {
+            Action callback = confidenceCompleted;
+            confidenceCompleted = null;
+            Destroy(gameObject);
+            callback?.Invoke();
+            return;
+        }
+
+        SetFeedbackResult(confidence);
         confidenceGroup.SetActive(false);
         feedbackGroup.SetActive(true);
-        TMP_Text result = feedbackGroup.transform.Find("Result").GetComponent<TMP_Text>();
-        result.text = selectedAnswer == CorrectAnswerIndex ? $"Correct!  |  Confidence: {confidence}%" : $"Your answer: {(char)('A' + selectedAnswer)}  |  Confidence: {confidence}%";
-        result.color = selectedAnswer == CorrectAnswerIndex ? new Color(.4f, 1, .55f) : new Color(1, .68f, .35f);
         Debug.Log($"{SessionPrefix}-P1 result: answer={(char)('A' + selectedAnswer)}, correct={selectedAnswer == CorrectAnswerIndex}, confidence={confidence}");
+    }
+
+    void SetFeedbackResult(int confidence)
+    {
+        TMP_Text result = feedbackGroup.transform.Find("Result")?.GetComponent<TMP_Text>();
+        if (result == null) return;
+        string suffix = confidence >= 0 ? $"  |  Confidence: {confidence}%" : string.Empty;
+        result.text = selectedAnswer == CorrectAnswerIndex
+            ? $"Correct!{suffix}"
+            : $"Your answer: {(char)('A' + selectedAnswer)}{suffix}";
+        result.color = selectedAnswer == CorrectAnswerIndex ? new Color(.4f, 1, .55f) : new Color(1, .68f, .35f);
     }
 
     void ContinueAfterFeedback()

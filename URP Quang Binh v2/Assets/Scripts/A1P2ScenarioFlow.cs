@@ -77,13 +77,20 @@ public sealed class A1P2ScenarioFlow : MonoBehaviour
         CleanupObject(ref previewHint);
         FloodStudyLogger.EndObservation();
         phase = Phase.Question;
-        P2Panel.ShowQuestion(StartPreview, BeginDykeBuilding);
+        P2Panel.ShowQuestion(StartPreview, BeginConfidence);
+    }
+
+    void BeginConfidence(int answer)
+    {
+        selectedAnswer = answer;
+        FloodStudyLogger.RecordAnswer(answer);
+        phase = Phase.Confidence;
+        P2Panel.ShowConfidenceBeforeBuild(answer, () => BeginDykeBuilding(answer));
     }
 
     void BeginDykeBuilding(int answer)
     {
         selectedAnswer = answer;
-        FloodStudyLogger.RecordAnswer(answer);
         FloodStudyLogger.BeginBuildingPhase();
         CleanupObject(ref preview);
         SetDykeConstruction(true, maxDykes, minDykeLengthMeters, maxDykeLengthMeters, 0f);
@@ -114,7 +121,7 @@ public sealed class A1P2ScenarioFlow : MonoBehaviour
         // the confidence and written-feedback screens. They are cleaned up
         // after the separate feedback scenario.
         phase = Phase.Confidence;
-        P2Panel.ShowConfidence(selectedAnswer, StartFeedbackScenario);
+        P2Panel.ShowFeedbackOnly(selectedAnswer, StartFeedbackScenario);
     }
 
     void StartFeedbackScenario()
@@ -222,6 +229,7 @@ public sealed class FloodBarrierScenarioA1P2 : MonoBehaviour
 
 static class P2Panel
 {
+    static int lastConfidence = -1;
     static readonly string[] AnswersA =
     {
         "A) The shorter path should be prioritized because water reaches it first.",
@@ -280,6 +288,16 @@ static class P2Panel
     }
     public static void ShowConfidence(int answer, Action onCompleted)
     {
+        ShowConfidenceInternal(answer, onCompleted, true);
+    }
+
+    public static void ShowConfidenceBeforeBuild(int answer, Action onCompleted)
+    {
+        ShowConfidenceInternal(answer, onCompleted, false);
+    }
+
+    static void ShowConfidenceInternal(int answer, Action onCompleted, bool showFeedbackAfterConfirm)
+    {
         GameObject root = CanvasRoot("Confidence_A1_P2", new Vector2(1450, 1020));
         GameObject confidence = FloodLearningUI.Group("ConfidenceGroup", root.transform);
         FloodLearningUI.Text("Question", confidence.transform, "How confident are you in your answer?", 42, FontStyles.Bold, -150, 70, TextAlignmentOptions.Center, 80);
@@ -292,9 +310,23 @@ static class P2Panel
             () =>
             {
                 int confidenceValue = Mathf.RoundToInt(slider.value) * 20;
+                lastConfidence = confidenceValue;
                 FloodStudyLogger.RecordConfidence(confidenceValue);
+                if (!showFeedbackAfterConfirm)
+                {
+                    UnityEngine.Object.Destroy(root);
+                    onCompleted?.Invoke();
+                    return;
+                }
                 ShowFeedback(root, answer, confidenceValue, onCompleted);
             }, 420);
+        FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.25f);
+    }
+
+    public static void ShowFeedbackOnly(int answer, Action onCompleted)
+    {
+        GameObject root = CanvasRoot("Feedback_A1_P2", new Vector2(1450, 1020));
+        ShowFeedback(root, answer, lastConfidence, onCompleted);
         FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.25f);
     }
     static void ShowFeedback(GameObject root, int answer, int confidence, Action onCompleted)
@@ -307,7 +339,8 @@ static class P2Panel
         string explanation = UseB
             ? "High terrain at the endpoints can extend the protective boundary and reduce the routes available for water to move around the barrier."
             : "A barrier is more effective when its endpoints connect to terrain that restricts lateral flow. Existing high ground can extend the effective protective boundary beyond the constructed barrier itself and reduce opportunities for water to bypass it.";
-        TMP_Text result = FloodLearningUI.Text("Result", root.transform, answer == CorrectAnswerIndex ? $"Correct!  |  Confidence: {confidence}%" : $"Your answer: {(char)('A' + answer)}  |  Confidence: {confidence}%", 39, FontStyles.Bold, -120, 62, TextAlignmentOptions.Center, 65); result.color = answer == CorrectAnswerIndex ? new Color(.4f, 1f, .55f) : new Color(1f, .68f, .35f);
+        string confidenceSuffix = confidence >= 0 ? $"  |  Confidence: {confidence}%" : string.Empty;
+        TMP_Text result = FloodLearningUI.Text("Result", root.transform, answer == CorrectAnswerIndex ? $"Correct!{confidenceSuffix}" : $"Your answer: {(char)('A' + answer)}{confidenceSuffix}", 39, FontStyles.Bold, -120, 62, TextAlignmentOptions.Center, 65); result.color = answer == CorrectAnswerIndex ? new Color(.4f, 1f, .55f) : new Color(1f, .68f, .35f);
         FloodLearningUI.Text("Correct", root.transform, correctText, 31, FontStyles.Bold, -220, 150, TextAlignmentOptions.TopLeft, 70).color = new Color(.4f, 1f, .55f);
         FloodLearningUI.Text("ExplanationTitle", root.transform, "Explanation", 34, FontStyles.Bold, -410, 55, TextAlignmentOptions.Left, 70);
         FloodLearningUI.Text("Explanation", root.transform, explanation, 29, FontStyles.Normal, -480, 240, TextAlignmentOptions.TopLeft, 70);

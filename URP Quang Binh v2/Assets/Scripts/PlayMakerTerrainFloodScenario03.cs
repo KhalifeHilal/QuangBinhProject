@@ -124,7 +124,7 @@ public sealed class PlayMakerTerrainFloodScenario03 : MonoBehaviour
         FloodStudyLogger.EndObservation();
         ClearDykeManagerChildren();
         phase = Phase.Question;
-        FloodScenarioQuizPanel.Show(RepeatScenario, SubmitAnswerWithoutDykes);
+        FloodScenarioQuizPanel.Show(RepeatScenario, SubmitAnswerWithoutDykes, FloodStudyLogger.RecordAnswer);
     }
 
     void RepeatScenario()
@@ -136,7 +136,6 @@ public sealed class PlayMakerTerrainFloodScenario03 : MonoBehaviour
     void SubmitAnswerWithoutDykes(int answer)
     {
         selectedAnswer = answer;
-        FloodStudyLogger.RecordAnswer(answer);
         if (activeScenario != null) Destroy(activeScenario);
         activeScenario = null;
         ClearDykeManagerChildren();
@@ -189,7 +188,7 @@ public sealed class PlayMakerTerrainFloodScenario03 : MonoBehaviour
         ClearDykeManagerChildren();
         SetA1P1Houses(false);
         phase = Phase.Confidence;
-        FloodScenarioQuizPanel.ShowConfidence(selectedAnswer, StartA1P2);
+        FloodScenarioQuizPanel.ShowFeedbackOnly(selectedAnswer, StartA1P2);
     }
 
     void StartA1P2()
