@@ -64,7 +64,8 @@ public sealed class A1P5ScenarioFlow : MonoBehaviour
     void Update()
     {
         if (phase == Phase.WaitingForA && ParticipantInput.StartWasPressedThisFrame(questA)) StartPreview();
-        if (phase == Phase.BuildingDykes && ParticipantInput.SimulationStartWasPressedThisFrame(questA)) StartFlood();
+        if (phase == Phase.BuildingDykes && !ParticipantInput.IsVirtualHandsParticipant &&
+            ParticipantInput.SimulationStartWasPressedThisFrame(questA)) StartFlood();
         if (phase != Phase.Preview && phase != Phase.Flood) return;
         elapsed += Time.deltaTime;
         if (phase == Phase.Preview && elapsed >= viewingDuration) ShowQuestion();
@@ -112,6 +113,8 @@ public sealed class A1P5ScenarioFlow : MonoBehaviour
         SetP5ScenarioObjects(false);
         SetDykeConstruction(true, maxDykes, minDykeLengthMeters, maxDykeLengthMeters, 0f);
         prompt = A1P5Panel.CreateBuildingPrompt();
+        if (ParticipantInput.IsVirtualHandsParticipant)
+            P2Panel.AttachVirtualContinue(prompt, StartFlood);
         waterDirectionHint = ScenarioGuidanceOverlay.ShowWaterFromLeft();
         phase = Phase.BuildingDykes;
     }
@@ -338,7 +341,9 @@ static class A1P5Panel
         GameObject root = P2Panel.CanvasRoot("A1_P5_Start", new Vector2(1100, 350));
         FloodLearningUI.Text("Title", root.transform, "A1 - P5", 40, FontStyles.Bold, -35, 55, TextAlignmentOptions.Center, 40);
         FloodLearningUI.Text("Topic", root.transform, "Resource-Efficient Placement", 42, FontStyles.Bold, -110, 65, TextAlignmentOptions.Center, 40);
-        FloodLearningUI.Text("Continue", root.transform, ParticipantInput.IsGamepadParticipant ? "Press B to continue" : "Press A to continue", 35, FontStyles.Normal, -220, 55, TextAlignmentOptions.Center, 40).color = new Color(.3f, .8f, 1f);
+        string continueText = ParticipantInput.IsGamepadParticipant ? "Press B to continue" :
+            ParticipantInput.IsVirtualHandsParticipant ? "Pinch to continue" : "Press A to continue";
+        FloodLearningUI.Text("Continue", root.transform, continueText, 35, FontStyles.Normal, -220, 55, TextAlignmentOptions.Center, 40).color = new Color(.3f, .8f, 1f);
         FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.1f);
         return root;
     }
@@ -349,7 +354,9 @@ static class A1P5Panel
         FloodLearningUI.Text("Title", root.transform, "A1 - P5  |  Build protection", 39, FontStyles.Bold, -35, 58, TextAlignmentOptions.Center, 45);
         string instructions = ParticipantInput.IsGamepadParticipant
             ? "Build one dyke up to 1.5 m. Hold right Grip and move the terrain cursor with the right thumbstick.\nPress Trigger once for the start and once for the end.\nPress A on a dyke to remove it. Release Grip to cancel. Press Y when finished."
-            : "Build one dyke up to 1.5 metres long to protect the housing block.\nBuild with the trigger. Point at a dyke and press Grip to destroy it. Press A when you are finished.";
+            : ParticipantInput.IsVirtualHandsParticipant
+                ? "Build one dyke up to 1.5 metres long to protect the housing block with a right-hand pinch.\nPinch once for the start point and once for the end point.\nPoint at a dyke and pinch to destroy it. Pinch Continue when you are finished."
+                : "Build one dyke up to 1.5 metres long to protect the housing block.\nBuild with the trigger. Point at a dyke and press Grip to destroy it. Press A when you are finished.";
         FloodLearningUI.Text("Prompt", root.transform, instructions, 30, FontStyles.Bold, -135, 155, TextAlignmentOptions.Center, 55).color = new Color(.35f, .82f, 1f);
         FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.1f);
         return root;

@@ -29,6 +29,10 @@ public static class ParticipantInput
         ParticipantSession.IsCheckedIn &&
         ParticipantSession.InteractionMode == ParticipantInteractionMode.Gamepad;
 
+    public static bool IsVirtualHandsParticipant =>
+        ParticipantSession.IsCheckedIn &&
+        ParticipantSession.InteractionMode == ParticipantInteractionMode.Virtual_Hands;
+
     public static void SetGamepadModeEnabled(bool enabled)
     {
         EnsureActions();
@@ -50,6 +54,10 @@ public static class ParticipantInput
             EnsureEnabled();
             return confirm.WasPressedThisFrame();
         }
+
+        if (IsVirtualHandsParticipant)
+            return VirtualHandsPinchInteractor.Active != null &&
+                VirtualHandsPinchInteractor.Active.PinchStartedThisFrame;
 
         return questAction != null && questAction.WasPressedThisFrame();
     }
@@ -82,6 +90,10 @@ public static class ParticipantInput
             return start.WasPressedThisFrame();
         }
 
+        if (IsVirtualHandsParticipant)
+            return VirtualHandsPinchInteractor.Active != null &&
+                VirtualHandsPinchInteractor.Active.PinchStartedThisFrame;
+
         return questAction != null && questAction.WasPressedThisFrame();
     }
 
@@ -93,6 +105,10 @@ public static class ParticipantInput
             return rightTrigger.WasPressedThisFrame();
         }
 
+        if (IsVirtualHandsParticipant)
+            return VirtualHandsPinchInteractor.Active != null &&
+                VirtualHandsPinchInteractor.Active.PinchStartedThisFrame;
+
         return questAction != null && questAction.WasPressedThisFrame();
     }
 
@@ -103,6 +119,10 @@ public static class ParticipantInput
             EnsureEnabled();
             return rightTrigger.IsPressed();
         }
+
+        if (IsVirtualHandsParticipant)
+            return VirtualHandsPinchInteractor.Active != null &&
+                VirtualHandsPinchInteractor.Active.IsPinching;
 
         return questAction != null && questAction.IsPressed();
     }
@@ -119,6 +139,10 @@ public static class ParticipantInput
             return simulationStart.WasPressedThisFrame();
         }
 
+        if (IsVirtualHandsParticipant)
+            return VirtualHandsPinchInteractor.Active != null &&
+                VirtualHandsPinchInteractor.Active.PinchStartedThisFrame;
+
         return questAction != null && questAction.WasPressedThisFrame();
     }
 
@@ -129,6 +153,10 @@ public static class ParticipantInput
             EnsureEnabled();
             return rightGrip.WasPressedThisFrame();
         }
+
+        if (IsVirtualHandsParticipant)
+            return VirtualHandsPinchInteractor.Active != null &&
+                VirtualHandsPinchInteractor.Active.PinchStartedThisFrame;
 
         return questAction != null && questAction.WasPressedThisFrame();
     }

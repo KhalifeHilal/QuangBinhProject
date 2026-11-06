@@ -2,9 +2,6 @@
 using WebSocketSharp;
 using System;
 using System.Collections.Generic;
-using System.Text;
-using System.Text.Json;
-using System.Buffers;
 
 public class ConnectionWithGama : MonoBehaviour
 {
@@ -42,16 +39,7 @@ public class ConnectionWithGama : MonoBehaviour
                          "\"agent\":" + EscapeJson(AgentToSendInfo) +
                          "}";
 
-        // Write the complete JSON string in one go.
-        var bufferWriter = new ArrayBufferWriter<byte>();
-        using (var writer = new Utf8JsonWriter(bufferWriter))
-        {
-            writer.WriteRawValue(jsonRaw, skipInputValidation: true);
-            writer.Flush();
-        }
-
-        string jsonStringExpression = Encoding.UTF8.GetString(bufferWriter.WrittenSpan);
-        SendMessageToServer(jsonStringExpression, success =>
+        SendMessageToServer(jsonRaw, success =>
         {
             if (!success)
             {

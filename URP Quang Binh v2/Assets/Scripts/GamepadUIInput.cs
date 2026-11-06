@@ -67,7 +67,10 @@ public static class GamepadUIInput
     /// </summary>
     public static void RefreshTutorialInstructions()
     {
-        if (!ParticipantInput.IsGamepadParticipant)
+        bool isGamepad = ParticipantInput.IsGamepadParticipant;
+        bool isVirtualHands = ParticipantSession.IsCheckedIn &&
+            ParticipantSession.InteractionMode == ParticipantInteractionMode.Virtual_Hands;
+        if (!isGamepad && !isVirtualHands)
             return;
 
         if (!tutorialInstructionsSearched)
@@ -99,7 +102,7 @@ public static class GamepadUIInput
         foreach (KeyValuePair<TMP_Text, TutorialInstructionKind> entry in tutorialInstructionLabels)
         {
             if (entry.Key != null)
-                ApplyTutorialInstruction(entry.Key, entry.Value);
+                ApplyTutorialInstruction(entry.Key, entry.Value, isVirtualHands);
         }
     }
 
@@ -139,8 +142,29 @@ public static class GamepadUIInput
         return false;
     }
 
-    static void ApplyTutorialInstruction(TMP_Text label, TutorialInstructionKind kind)
+    static void ApplyTutorialInstruction(TMP_Text label, TutorialInstructionKind kind, bool isVirtualHands)
     {
+        if (isVirtualHands)
+        {
+            switch (kind)
+            {
+                case TutorialInstructionKind.Move:
+                    label.text = "Pinch with your left hand and move it to move.";
+                    break;
+                case TutorialInstructionKind.Start:
+                    label.text = "Pinch to start.";
+                    break;
+                case TutorialInstructionKind.DestroyDyke:
+                    label.text = "Point at the dyke and pinch with your right hand to destroy it.";
+                    break;
+                case TutorialInstructionKind.BuildDyke:
+                    label.text = "Build a dyke with a right-hand pinch.\n" +
+                        "Pinch once for the start point and once for the end point.";
+                    break;
+            }
+            return;
+        }
+
         switch (kind)
         {
             case TutorialInstructionKind.Move:

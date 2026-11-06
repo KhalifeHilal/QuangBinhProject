@@ -112,7 +112,9 @@ public sealed class FloodScenarioQuizPanel : MonoBehaviour
         for (int i = 0; i < CurrentAnswers.Length; i++) answerButtons[i] = CreateAnswerButton(i, -350 - i * 125);
         string hintText = ParticipantInput.IsGamepadParticipant
             ? "Use the right thumbstick to highlight an answer. Press A to select."
-            : "Point at an answer and confirm it with the controller trigger.";
+            : ParticipantInput.IsVirtualHandsParticipant
+                ? "Point at an answer and pinch with your right hand to select."
+                : "Point at an answer and confirm it with the controller trigger.";
         TMP_Text hint = FloodLearningUI.Text("Hint", questionGroup.transform, hintText, 27, FontStyles.Normal, -875, 55, TextAlignmentOptions.Center, 55);
         hint.color = new Color(.72f, .86f, 1);
         FloodLearningUI.Button("RepeatScenario", questionGroup.transform, "Repeat scenario", -965, 82, 29, RepeatScenario, 390);
@@ -307,7 +309,8 @@ sealed class FloodScenarioContinuePrompt : MonoBehaviour
         RectTransform r = (RectTransform)root.transform; r.sizeDelta = new Vector2(900, 330); r.localScale = Vector3.one * .0015f; FloodLearningUIStyle.ApplyPanel(root.AddComponent<Image>());
         FloodLearningUI.Text("Title", root.transform, "A1 - P1", 39, FontStyles.Bold, -35, 55, TextAlignmentOptions.Center, 45);
         FloodLearningUI.Text("Scenario", root.transform, "Flood Pathway Identification", 43, FontStyles.Bold, -105, 65, TextAlignmentOptions.Center, 45);
-        string continueText = ParticipantInput.IsGamepadParticipant ? "Press B to continue" : "Press A to continue";
+        string continueText = ParticipantInput.IsGamepadParticipant ? "Press B to continue" :
+            ParticipantInput.IsVirtualHandsParticipant ? "Pinch to continue" : "Press A to continue";
         TMP_Text prompt = FloodLearningUI.Text("Prompt", root.transform, continueText, 35, FontStyles.Normal, -210, 55, TextAlignmentOptions.Center, 45); prompt.color = new Color(.35f, .82f, 1);
         FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.1f); return root;
     }
@@ -318,7 +321,8 @@ sealed class FloodScenarioContinuePrompt : MonoBehaviour
         RectTransform r = (RectTransform)root.transform; r.sizeDelta = new Vector2(1000, 330); r.localScale = Vector3.one * .0015f; FloodLearningUIStyle.ApplyPanel(root.AddComponent<Image>());
         FloodLearningUI.Text("Title", root.transform, "A1 - P1", 39, FontStyles.Bold, -35, 55, TextAlignmentOptions.Center, 45);
         FloodLearningUI.Text("Scenario", root.transform, "Flood simulation", 43, FontStyles.Bold, -105, 65, TextAlignmentOptions.Center, 45);
-        string startText = ParticipantInput.IsGamepadParticipant ? "Press Y to start the simulation" : "Press A to start the simulation";
+        string startText = ParticipantInput.IsGamepadParticipant ? "Press Y to start the simulation" :
+            ParticipantInput.IsVirtualHandsParticipant ? "Pinch to start the simulation" : "Press A to start the simulation";
         TMP_Text prompt = FloodLearningUI.Text("Prompt", root.transform, startText, 35, FontStyles.Normal, -210, 55, TextAlignmentOptions.Center, 45); prompt.color = new Color(.35f, .82f, 1);
         FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.1f); return root;
     }
@@ -328,8 +332,13 @@ sealed class FloodScenarioContinuePrompt : MonoBehaviour
         GameObject root = new GameObject("A1_P1_DykeBuildingPrompt", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler)); root.GetComponent<Canvas>().renderMode = RenderMode.WorldSpace;
         RectTransform r = (RectTransform)root.transform; r.sizeDelta = new Vector2(1050, 390); r.localScale = Vector3.one * .0015f; FloodLearningUIStyle.ApplyPanel(root.AddComponent<Image>());
         FloodLearningUI.Text("Title", root.transform, "A1 - P1  |  Build protection", 39, FontStyles.Bold, -35, 58, TextAlignmentOptions.Center, 45);
+        string buildingInstruction = ParticipantInput.IsGamepadParticipant
+            ? "Build dykes for your answer anywhere on the terrain with the trigger.\nPoint at one and press Grip to destroy it. Press Y when you are finished."
+            : ParticipantInput.IsVirtualHandsParticipant
+                ? "Build dykes for your answer anywhere on the terrain with a right-hand pinch.\nPoint at one and pinch to destroy it. Pinch Continue when you are finished."
+                : "Build dykes for your answer anywhere on the terrain with the trigger.\nPoint at one and press Grip to destroy it. Press A when you are finished.";
         TMP_Text prompt = FloodLearningUI.Text("Prompt", root.transform,
-            $"Build dykes for your answer anywhere on the terrain with the trigger.\nPoint at one and press Grip to destroy it. Press {(ParticipantInput.IsGamepadParticipant ? "Y" : "A")} when you are finished.",
+            buildingInstruction,
             30, FontStyles.Bold, -135, 125, TextAlignmentOptions.Center, 55); prompt.color = new Color(.35f, .82f, 1);
         FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.1f); return root;
     }

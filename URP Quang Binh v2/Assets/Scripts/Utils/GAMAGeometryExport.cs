@@ -1,10 +1,9 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
-using System.Text;
-using System.Text.Json;
 using UnityEngine;
 using WebSocketSharp;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 public class GAMAGeometryExport : ConnectionWithGama
 {
@@ -73,23 +72,13 @@ public class GAMAGeometryExport : ConnectionWithGama
 
     void HandleConnectionOpen(object sender, EventArgs e)
     {
-        // Prebuild the entire JSON payload as a string.
-        string rawJson = "{\"type\":\"connection\",\"id\":\"geomexporter\",\"heartbeat\":\"5000\"}";
-    
-        using (var stream = new MemoryStream())
+        string jsonStringId = new JObject
         {
-            using (var writer = new Utf8JsonWriter(stream))
-            {
-                // Write the raw JSON in one call.
-                writer.WriteRawValue(rawJson, skipInputValidation: true);
-                writer.Flush();
-            }
-            string jsonStringId = Encoding.UTF8.GetString(stream.ToArray());
-            SendMessageToServer(jsonStringId, (success) =>
-            {
-                // Optionally handle the send success.
-            });
-        }
+            ["type"] = "connection",
+            ["id"] = "geomexporter",
+            ["heartbeat"] = "5000"
+        }.ToString(Formatting.None);
+        SendMessageToServer(jsonStringId, (success) => { });
         Debug.Log("ConnectionManager: Connection opened");
     }
 
@@ -126,73 +115,30 @@ public class GAMAGeometryExport : ConnectionWithGama
     {
         if (e.IsText)
         {
-            ReadOnlySpan<byte> jsonBytes = Encoding.UTF8.GetBytes(e.Data);
-            var reader = new Utf8JsonReader(jsonBytes, isFinalBlock: true, state: default);
+            JObject root = JObject.Parse(e.Data);
+            string type = (string)root["type"];
 
-            string type = null;
-            string contentsJson = null;
-            bool inGameFlag = false;
-            bool foundType = false;
-            bool foundContents = false;
-            bool foundInGame = false;
-
-            // Process JSON tokens manually.
-            while (reader.Read())
+            if (type == "json_output")
             {
-                if (reader.TokenType == JsonTokenType.PropertyName)
+                JObject contents = root["contents"] as JObject;
+                if (contents != null)
                 {
-                    string propertyName = reader.GetString();
-                    if (propertyName == "type")
+                    string firstKey = null;
+                    foreach (JProperty prop in contents.Properties())
                     {
-                        reader.Read();
-                        type = reader.GetString();
-                        foundType = true;
+                        firstKey = prop.Name;
+                        break;
                     }
-                    else if (propertyName == "contents" && type == "json_output")
-                    {
-                        // Use JsonDocument to capture the nested object.
-                        using (JsonDocument doc = JsonDocument.ParseValue(ref reader))
-                        {
-                            contentsJson = doc.RootElement.GetRawText();
-                        }
-                        foundContents = true;
-                    }
-                    else if (propertyName == "in_game" && type == "json_state")
-                    {
-                        reader.Read();
-                        inGameFlag = reader.GetBoolean();
-                        foundInGame = true;
-                    }
+                    HandleServerMessageReceived(firstKey, contents.ToString(Formatting.None));
                 }
             }
-
-            if (foundType)
+            else if (type == "json_state")
             {
-                if (type == "json_output" && foundContents)
+                bool inGameFlag = (bool?)root["in_game"] ?? false;
+                if (inGameFlag)
                 {
-                    // Manually iterate properties of the contents object to get the first key.
-                    string firstKey = null;
-                    using (JsonDocument doc = JsonDocument.Parse(contentsJson))
-                    {
-                        JsonElement root = doc.RootElement;
-                        if (root.ValueKind == JsonValueKind.Object)
-                        {
-                            foreach (JsonProperty prop in root.EnumerateObject())
-                            {
-                                firstKey = prop.Name;
-                                break;
-                            }
-                        }
-                    }
-                    HandleServerMessageReceived(firstKey, contentsJson);
-                }
-                else if (type == "json_state" && foundInGame)
-                {
-                    if (inGameFlag)
-                    {
-                        var args = new Dictionary<string, string> { { "id", "geomexporter" } };
-                        SendExecutableAsk("send_init_data", args);
-                    }
+                    var args = new Dictionary<string, string> { { "id", "geomexporter" } };
+                    SendExecutableAsk("send_init_data", args);
                 }
             }
         }

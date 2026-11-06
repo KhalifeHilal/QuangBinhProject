@@ -1,5 +1,4 @@
 ﻿using UnityEngine;
-using QuickTest;
 using UnityEngine.UI;
 using Gama_Provider.Simulation;
 using TMPro;

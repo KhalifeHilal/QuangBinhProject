@@ -2,9 +2,8 @@ using UnityEngine;
 using WebSocketSharp;
 using System;
 using System.Collections.Generic;
-using System.Text.Json;
-using System.IO;
-using System.Text;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 public class GAMAGeometryLoader : ConnectionWithGama
 {
@@ -72,7 +71,6 @@ public class GAMAGeometryLoader : ConnectionWithGama
 
     void HandleConnectionOpen(object sender, EventArgs e)
     {
-        // Create connection JSON message using Utf8JsonWriter
         string jsonStringId = CreateConnectionMessage();
         SendMessageToServer(jsonStringId, new Action<bool>((success) =>
         {
@@ -285,83 +283,47 @@ public class GAMAGeometryLoader : ConnectionWithGama
     {
         if (e.IsText)
         {
-            byte[] jsonData = Encoding.UTF8.GetBytes(e.Data);
-            var reader = new Utf8JsonReader(jsonData);
-            string type = null;
-            string firstKey = null;
-            string contentString = null;
+            JObject root = JObject.Parse(e.Data);
+            string type = (string)root["type"];
 
-            while (reader.Read())
+            if (type == "json_output")
             {
-                if (reader.TokenType == JsonTokenType.PropertyName)
+                JObject contents = root["contents"] as JObject;
+                string firstKey = null;
+                if (contents != null)
                 {
-                    string propertyName = reader.GetString();
-                    if (propertyName == "type")
+                    foreach (JProperty prop in contents.Properties())
                     {
-                        reader.Read();
-                        type = reader.GetString();
-                    }
-                    else if (propertyName == "contents" && type == "json_output")
-                    {
-                        reader.Read(); // Move to the start of the contents object
-                        if (reader.TokenType == JsonTokenType.StartObject)
-                        {
-                            // Read first property inside "contents"
-                            if (reader.Read() && reader.TokenType == JsonTokenType.PropertyName)
-                            {
-                                firstKey = reader.GetString();
-                                // Use JsonDocument to extract the full "contents" object as raw text
-                                using (JsonDocument doc = JsonDocument.ParseValue(ref reader))
-                                {
-                                    contentString = doc.RootElement.GetRawText();
-                                }
-                            }
-                        }
+                        firstKey = prop.Name;
+                        break;
                     }
                 }
+                string contentString = contents?.ToString(Formatting.None);
+                if (!string.IsNullOrEmpty(firstKey))
+                    HandleServerMessageReceived(firstKey, contentString);
             }
-
-            if (!string.IsNullOrEmpty(type))
+            else if (type == "json_state")
             {
-                if (type.Equals("json_output"))
+                bool inGame = (bool?)root["in_game"] ?? false;
+                if (inGame)
                 {
-                    if (!string.IsNullOrEmpty(firstKey))
+                    Dictionary<string, string> args = new Dictionary<string, string>
                     {
-                        HandleServerMessageReceived(firstKey, contentString);
-                    }
-                }
-                else if (type.Equals("json_state"))
-                {
-                    using (JsonDocument doc = JsonDocument.Parse(e.Data))
-                    {
-                        bool inGame = doc.RootElement.GetProperty("in_game").GetBoolean();
-                        if (inGame)
-                        {
-                            Dictionary<string, string> args = new Dictionary<string, string>
-                            {
-                                { "id", "geomloader" }
-                            };
-                            SendExecutableAsk("send_init_data", args);
-                        }
-                    }
+                        { "id", "geomloader" }
+                    };
+                    SendExecutableAsk("send_init_data", args);
                 }
             }
         }
     }
 
-    // Create connection JSON message using Utf8JsonWriter
     private string CreateConnectionMessage()
     {
-        string rawJson = "{\"type\":\"connection\",\"id\":\"geomexporter\",\"heartbeat\":\"5000\"}";
-        
-        using (var stream = new MemoryStream())
+        return new JObject
         {
-            using (var writer = new Utf8JsonWriter(stream))
-            {
-                writer.WriteRawValue(rawJson);
-                writer.Flush();
-            }
-            return Encoding.UTF8.GetString(stream.ToArray());
-        }
+            ["type"] = "connection",
+            ["id"] = "geomexporter",
+            ["heartbeat"] = "5000"
+        }.ToString(Formatting.None);
     }
 }

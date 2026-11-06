@@ -141,10 +141,19 @@ public class DykeManagerTutorial : MonoBehaviour
         SetHoveredScenarioDyke(next);
     }
 
+    bool IsVirtualHandsMode => ParticipantSession.IsCheckedIn &&
+        ParticipantSession.InteractionMode == ParticipantInteractionMode.Virtual_Hands;
+
+    VirtualHandsPinchInteractor VirtualHands => VirtualHandsPinchInteractor.Active;
+
+    XRRayInteractor ActiveRayInteractor => IsVirtualHandsMode && VirtualHands != null &&
+        VirtualHands.RayInteractor != null ? VirtualHands.RayInteractor : rightXRRayInteractor;
+
     A1P1ScenarioDyke FindScenarioDykeUnderRay()
     {
-        if (rightXRRayInteractor == null || rightXRRayInteractor.rayOriginTransform == null) return null;
-        Transform origin = rightXRRayInteractor.rayOriginTransform;
+        XRRayInteractor activeRay = ActiveRayInteractor;
+        if (activeRay == null || activeRay.rayOriginTransform == null) return null;
+        Transform origin = activeRay.rayOriginTransform;
         RaycastHit[] hits = Physics.RaycastAll(origin.position, origin.forward, 100f, ~0, QueryTriggerInteraction.Collide);
         A1P1ScenarioDyke closestDyke = null;
         float closestDistance = float.MaxValue;
@@ -225,12 +234,13 @@ public class DykeManagerTutorial : MonoBehaviour
     bool TryGetPlacementTerrainHit(out RaycastHit terrainHit)
     {
         terrainHit = default;
-        if (rightXRRayInteractor == null || rightXRRayInteractor.rayOriginTransform == null) return false;
+        XRRayInteractor activeRay = ActiveRayInteractor;
+        if (activeRay == null || activeRay.rayOriginTransform == null) return false;
 
         if (!freePlacement)
-            return rightXRRayInteractor.TryGetCurrent3DRaycastHit(out terrainHit);
+            return activeRay.TryGetCurrent3DRaycastHit(out terrainHit);
 
-        Transform origin = rightXRRayInteractor.rayOriginTransform;
+        Transform origin = activeRay.rayOriginTransform;
         RaycastHit[] hits = Physics.RaycastAll(origin.position, origin.forward, 100f, ~0, QueryTriggerInteraction.Ignore);
         float closestDistance = float.MaxValue;
         bool found = false;
@@ -246,7 +256,13 @@ public class DykeManagerTutorial : MonoBehaviour
 
     void ProcessFreePlacementGrip()
     {
-        if (!freePlacement || scenarioGrip == null || !scenarioGrip.WasPressedThisFrame()) return;
+        if (!freePlacement) return;
+
+        bool pressed = IsVirtualHandsMode
+            ? VirtualHands != null && VirtualHands.PinchStartedThisFrame
+            : scenarioGrip != null && scenarioGrip.WasPressedThisFrame();
+        if (!pressed) return;
+
         A1P1ScenarioDyke scenarioDyke = FindScenarioDykeUnderRay();
         if (scenarioDyke != null)
         {
@@ -256,7 +272,17 @@ public class DykeManagerTutorial : MonoBehaviour
 
     void ProcessRightHandTrigger()
     {
-        if (rightHandTriggerButton != null && rightHandTriggerButton.action.triggered)
+        bool pressed = IsVirtualHandsMode
+            ? VirtualHands != null && VirtualHands.PinchStartedThisFrame
+            : rightHandTriggerButton != null && rightHandTriggerButton.action.triggered;
+        bool held = IsVirtualHandsMode
+            ? VirtualHands != null && VirtualHands.IsPinching
+            : rightHandTriggerButton != null && rightHandTriggerButton.action.inProgress;
+        bool released = IsVirtualHandsMode
+            ? VirtualHands != null && VirtualHands.PinchReleasedThisFrame
+            : rightHandTriggerButton != null && !rightHandTriggerButton.action.inProgress;
+
+        if (pressed)
         {
             if (!inTriggerPress)
             {
@@ -275,7 +301,7 @@ public class DykeManagerTutorial : MonoBehaviour
             }
         }
 
-        if (rightHandTriggerButton != null && !rightHandTriggerButton.action.inProgress)
+        if (released && !held)
         {
             displayFutureDike = false;
             if (futureDyke != null)

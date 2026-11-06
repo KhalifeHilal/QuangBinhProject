@@ -1,10 +1,9 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
-using System.Text;
 using UnityEngine;
 using WebSocketSharp;
-using System.Text.Json;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using UnityEngine.SceneManagement;
 using System.Collections;
 
@@ -20,7 +19,7 @@ public class ConnectionManager : WebSocketConnector
     public event Action<string, string> OnServerMessageReceived;
 
     // called when a "json_state" message is received 
-    public event Action<JsonElement> OnConnectionStateReceived;
+    public event Action<JObject> OnConnectionStateReceived;
 
     // called when a connection request fails
     public event Action<bool> OnConnectionAttempted;
@@ -57,19 +56,6 @@ public class ConnectionManager : WebSocketConnector
     public string GetMessageSeparator()
     {
         return MessageSeparator;
-    }
-
-    // Helper method to build JSON strings using Utf8JsonWriter
-    private static string WriteJson(Action<Utf8JsonWriter> writeAction)
-    {
-        using (var stream = new MemoryStream())
-        {
-            using (var writer = new Utf8JsonWriter(stream))
-            {
-                writeAction(writer);
-            }
-            return Encoding.UTF8.GetString(stream.ToArray());
-        }
     }
 
     // ############################################# CONNECTION HANDLER #############################################
@@ -111,15 +97,12 @@ public class ConnectionManager : WebSocketConnector
     {
         if (UseMiddleware)
         {
-            // Writing heartbeat as a number
-            string jsonStringId = WriteJson(writer =>
+            string jsonStringId = new JObject
             {
-                writer.WriteStartObject();
-                writer.WriteString("type", "connection");
-                writer.WriteString("id", StaticInformation.getId());
-                writer.WriteNumber("heartbeat", HeartbeatInMs);
-                writer.WriteEndObject();
-            });
+                ["type"] = "connection",
+                ["id"] = StaticInformation.getId(),
+                ["heartbeat"] = HeartbeatInMs
+            }.ToString(Formatting.None);
 
             SendMessageToServer(jsonStringId, new Action<bool>((success) =>
             {
@@ -133,22 +116,15 @@ public class ConnectionManager : WebSocketConnector
     {
         if (e.IsText)
         {
-            // For further optimization, consider replacing JsonDocument with Utf8JsonReader if only a few properties are needed.
-            JsonDocument jsonObj = JsonDocument.Parse(e.Data);
-            JsonElement root = jsonObj.RootElement.Clone();
-            string type = root.GetProperty("type").GetString();
+            JObject root = JObject.Parse(e.Data);
+            string type = (string)root["type"];
 
             if (UseMiddleware)
             {
                 switch (type)
                 {
                     case "ping":
-                        string jsonPong = WriteJson(writer =>
-                        {
-                            writer.WriteStartObject();
-                            writer.WriteString("type", "pong");
-                            writer.WriteEndObject();
-                        });
+                        string jsonPong = new JObject { ["type"] = "pong" }.ToString(Formatting.None);
                         SendMessageToServer(jsonPong, new Action<bool>((success) =>
                         {
                             // Optionally handle success.
@@ -156,8 +132,8 @@ public class ConnectionManager : WebSocketConnector
                         break;
                     case "json_state":
                         OnConnectionStateReceived?.Invoke(root);
-                        bool authenticated = root.GetProperty("in_game").GetBoolean();
-                        bool connected = root.GetProperty("connected").GetBoolean();
+                        bool authenticated = (bool?)root["in_game"] ?? false;
+                        bool connected = (bool?)root["connected"] ?? false;
 
                         if (authenticated && connected)
                         {
@@ -183,15 +159,17 @@ public class ConnectionManager : WebSocketConnector
                         }
                         break;
                     case "json_output":
-                        JsonElement content = root.GetProperty("contents");
+                        JObject content = root["contents"] as JObject;
                         string firstKey = null;
-                        // Avoid LINQ by using a simple loop.
-                        foreach (JsonProperty prop in content.EnumerateObject())
+                        if (content != null)
                         {
-                            firstKey = prop.Name;
-                            break;
+                            foreach (JProperty prop in content.Properties())
+                            {
+                                firstKey = prop.Name;
+                                break;
+                            }
                         }
-                        OnServerMessageReceived?.Invoke(firstKey, content.ToString());
+                        OnServerMessageReceived?.Invoke(firstKey, content?.ToString(Formatting.None));
                         break;
                     default:
                         break;
@@ -199,7 +177,7 @@ public class ConnectionManager : WebSocketConnector
             }
             else if (type.Equals("SimulationOutput"))
             {
-                string content = root.GetProperty("content").GetString();
+                string content = (string)root["content"];
                 // Split using the message separator.
                 foreach (string mes in content.Split(new string[] { MessageSeparator }, StringSplitOptions.None))
                 {
@@ -275,13 +253,11 @@ public class ConnectionManager : WebSocketConnector
 
     public void SendExecutableExpression(string expression)
     {
-        string jsonStringExpression = WriteJson(writer =>
+        string jsonStringExpression = new JObject
         {
-            writer.WriteStartObject();
-            writer.WriteString("type", "expression");
-            writer.WriteString("expr", expression);
-            writer.WriteEndObject();
-        });
+            ["type"] = "expression",
+            ["expr"] = expression
+        }.ToString(Formatting.None);
 
         SendMessageToServer(jsonStringExpression, new Action<bool>((success) =>
         {
@@ -305,27 +281,17 @@ public class ConnectionManager : WebSocketConnector
 
     public void SendExecutableAsk(string action, Dictionary<string, string> arguments)
     {
-        // First serialize the arguments dictionary into a JSON string.
-        string argsJSON = WriteJson(writer =>
-        {
-            writer.WriteStartObject();
-            foreach (var kvp in arguments)
-            {
-                writer.WriteString(kvp.Key, kvp.Value);
-            }
-            writer.WriteEndObject();
-        });
+        JObject args = new JObject();
+        foreach (var kvp in arguments)
+            args[kvp.Key] = kvp.Value;
 
-        // Now build the outer JSON with "args" as a string.
-        string jsonStringExpression = WriteJson(writer =>
+        string jsonStringExpression = new JObject
         {
-            writer.WriteStartObject();
-            writer.WriteString("type", "ask");
-            writer.WriteString("action", action);
-            writer.WriteString("args", argsJSON);  // Write the serialized arguments as a string.
-            writer.WriteString("agent", AgentToSendInfo);
-            writer.WriteEndObject();
-        });
+            ["type"] = "ask",
+            ["action"] = action,
+            ["args"] = args.ToString(Formatting.None),
+            ["agent"] = AgentToSendInfo
+        }.ToString(Formatting.None);
 
         SendMessageToServer(jsonStringExpression, new Action<bool>((success) =>
         {
@@ -349,12 +315,10 @@ public class ConnectionManager : WebSocketConnector
 
     public void DisconnectProperly()
     {
-        string jsonStringExpression = WriteJson(writer =>
+        string jsonStringExpression = new JObject
         {
-            writer.WriteStartObject();
-            writer.WriteString("type", "disconnect_properly");
-            writer.WriteEndObject();
-        });
+            ["type"] = "disconnect_properly"
+        }.ToString(Formatting.None);
 
         SendMessageToServer(jsonStringExpression, new Action<bool>((success) =>
         {

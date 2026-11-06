@@ -1,2 +1,15 @@
 fileFormatVersion: 2
 guid: d628efc3440be445e912c26af9997995
+PluginImporter:
+  serializedVersion: 2
+  iconMap: {}
+  executionOrder: {}
+  defineConstraints: []
+  isPreloaded: 0
+  isOverridable: 1
+  isExplicitlyReferenced: 1
+  validateReferences: 1
+  platformData: []
+  userData:
+  assetBundleName:
+  assetBundleVariant:

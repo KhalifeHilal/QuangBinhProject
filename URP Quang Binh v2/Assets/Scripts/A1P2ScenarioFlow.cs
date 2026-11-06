@@ -54,7 +54,8 @@ public sealed class A1P2ScenarioFlow : MonoBehaviour
     void Update()
     {
         if (phase == Phase.WaitingForA && ParticipantInput.StartWasPressedThisFrame(questA)) StartPreview();
-        if (phase == Phase.BuildingDykes && ParticipantInput.SimulationStartWasPressedThisFrame(questA)) StartFlood();
+        if (phase == Phase.BuildingDykes && !ParticipantInput.IsVirtualHandsParticipant &&
+            ParticipantInput.SimulationStartWasPressedThisFrame(questA)) StartFlood();
         if (phase != Phase.Preview && phase != Phase.Flood) return;
         elapsed += Time.deltaTime;
         if (phase == Phase.Preview && elapsed >= viewingDuration) ShowQuestion();
@@ -95,6 +96,8 @@ public sealed class A1P2ScenarioFlow : MonoBehaviour
         CleanupObject(ref preview);
         SetDykeConstruction(true, maxDykes, minDykeLengthMeters, maxDykeLengthMeters, 0f);
         prompt = P2Panel.CreateBuildingPrompt();
+        if (ParticipantInput.IsVirtualHandsParticipant)
+            P2Panel.AttachVirtualContinue(prompt, StartFlood);
         waterDirectionHint = ScenarioGuidanceOverlay.ShowWaterFromLeft();
         phase = Phase.BuildingDykes;
     }
@@ -253,7 +256,9 @@ static class P2Panel
         GameObject root = CanvasRoot("A1_P2_Start", new Vector2(950, 350));
         FloodLearningUI.Text("Title", root.transform, "A1 - P2", 40, FontStyles.Bold, -35, 55, TextAlignmentOptions.Center, 40);
         FloodLearningUI.Text("Topic", root.transform, "Topography", 45, FontStyles.Bold, -110, 65, TextAlignmentOptions.Center, 40);
-        FloodLearningUI.Text("Continue", root.transform, ParticipantInput.IsGamepadParticipant ? "Press B to continue" : "Press A to continue", 35, FontStyles.Normal, -220, 55, TextAlignmentOptions.Center, 40).color = new Color(.3f, .8f, 1f);
+        string continueText = ParticipantInput.IsGamepadParticipant ? "Press B to continue" :
+            ParticipantInput.IsVirtualHandsParticipant ? "Pinch to continue" : "Press A to continue";
+        FloodLearningUI.Text("Continue", root.transform, continueText, 35, FontStyles.Normal, -220, 55, TextAlignmentOptions.Center, 40).color = new Color(.3f, .8f, 1f);
         FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.1f); return root;
     }
     public static GameObject CreatePreviewHint()
@@ -268,9 +273,23 @@ static class P2Panel
         FloodLearningUI.Text("Title", root.transform, "A1 - P2  |  Build protection", 39, FontStyles.Bold, -35, 58, TextAlignmentOptions.Center, 45);
         string instructions = ParticipantInput.IsGamepadParticipant
             ? "Build one dyke up to 3.5 m. Hold right Grip and move the terrain cursor with the right thumbstick.\nPress Trigger once for the start and once for the end.\nPress A on a dyke to remove it. Release Grip to cancel. Press Y when finished."
-            : "Build one dyke up to 3.5 metres long anywhere on the terrain with the trigger.\nPoint at it and press Grip to destroy it. Press A when you are finished.";
+            : ParticipantInput.IsVirtualHandsParticipant
+                ? "Build one dyke up to 3.5 metres long anywhere on the terrain with a right-hand pinch.\nPinch once for the start point and once for the end point.\nPoint at a dyke and pinch to destroy it. Pinch Continue when you are finished."
+                : "Build one dyke up to 3.5 metres long anywhere on the terrain with the trigger.\nPoint at it and press Grip to destroy it. Press A when you are finished.";
         FloodLearningUI.Text("Prompt", root.transform, instructions, 30, FontStyles.Bold, -135, 135, TextAlignmentOptions.Center, 55).color = new Color(.35f, .82f, 1f);
         FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.1f); return root;
+    }
+
+    public static void AttachVirtualContinue(GameObject root, Action onContinue)
+    {
+        if (root == null || !ParticipantInput.IsVirtualHandsParticipant)
+            return;
+
+        Button button = FloodLearningUI.Button("Continue", root.transform, "Continue", -305, 78, 29,
+            () => onContinue?.Invoke(), 360);
+        button.interactable = false;
+        VirtualHandsBuildContinueGate gate = root.AddComponent<VirtualHandsBuildContinueGate>();
+        gate.Initialise(button);
     }
     public static void ShowQuestion(Action repeat, Action<int> answer)
     {
@@ -355,6 +374,35 @@ static class P2Panel
     }
 }
 
+sealed class VirtualHandsBuildContinueGate : MonoBehaviour
+{
+    Button button;
+    DykeManagerTutorial manager;
+    int initialBuilt;
+    int initialDestroyed;
+
+    public void Initialise(Button target)
+    {
+        button = target;
+        manager = UnityEngine.Object.FindFirstObjectByType<DykeManagerTutorial>(FindObjectsInactive.Include);
+        if (manager != null)
+        {
+            initialBuilt = manager.dykeBuilt;
+            initialDestroyed = manager.dykeDestroyed;
+        }
+    }
+
+    void Update()
+    {
+        if (button == null)
+            return;
+        if (manager == null)
+            manager = UnityEngine.Object.FindFirstObjectByType<DykeManagerTutorial>(FindObjectsInactive.Include);
+        if (manager != null && (manager.dykeBuilt > initialBuilt || manager.dykeDestroyed > initialDestroyed))
+            button.interactable = true;
+    }
+}
+
 /// <summary>
 /// Displays the participant's built barriers after the written feedback. The
 /// barriers stay in the scene and are made translucent so a model solution can
@@ -393,8 +441,12 @@ static class ScenarioFeedbackStage
             "The model solution is shown together with your barriers.", 30,
             FontStyles.Normal, -225, 60, TextAlignmentOptions.Center, 55);
         FloodLearningUI.Text("SimulationPrompt", panel.transform,
-            ParticipantInput.IsGamepadParticipant ? "Press Y to start the feedback simulation." : "Press A to start the feedback simulation.", 30,
+            ParticipantInput.IsGamepadParticipant ? "Press Y to start the feedback simulation." :
+            ParticipantInput.IsVirtualHandsParticipant ? "Pinch to start the feedback simulation." : "Press A to start the feedback simulation.", 30,
             FontStyles.Normal, -300, 55, TextAlignmentOptions.Center, 55).color = new Color(.35f, .82f, 1f);
+        if (ParticipantInput.IsVirtualHandsParticipant)
+            FloodLearningUI.Button("StartFeedbackSimulation", panel.transform, "Start simulation", -335, 76, 28,
+                controller.StartSimulationFromUI, 420);
         UnityEngine.UI.Button continueButton = FloodLearningUI.Button("Continue", panel.transform, "Continue", -375, 82, 29,
             () =>
             {
@@ -550,12 +602,21 @@ sealed class ScenarioFeedbackStageController : MonoBehaviour
         simulation.Begin();
     }
 
+    public void StartSimulationFromUI()
+    {
+        if (!waitingForStart || SimulationFinished)
+            return;
+        waitingForStart = false;
+        StartSimulation();
+    }
+
     void Update()
     {
         if (SimulationFinished) return;
         if (waitingForStart)
         {
-            if (questA != null && ParticipantInput.SimulationStartWasPressedThisFrame(questA))
+            if (!ParticipantInput.IsVirtualHandsParticipant && questA != null &&
+                ParticipantInput.SimulationStartWasPressedThisFrame(questA))
             {
                 waitingForStart = false;
                 StartSimulation();

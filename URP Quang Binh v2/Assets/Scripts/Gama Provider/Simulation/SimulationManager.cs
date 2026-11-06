@@ -2,7 +2,6 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using Gama_Provider.Simulation;
-using QuickTest;
 using TMPro;
 using UnityEngine;
 using UnityEngine.XR.Interaction.Toolkit;
@@ -91,9 +90,6 @@ public class SimulationManager : MonoBehaviour
     protected float TimerSendPosition = 0.0f;
 
     protected List<GameObject> locomotion;
-    protected MoveHorizontal mh = null;
-    protected MoveVertical mv = null;
-
     protected DEMData data;
     protected DEMDataLoc dataLoc;
     protected TeleportAreaInfo dataTeleport;
