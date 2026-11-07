@@ -25,8 +25,10 @@ public sealed class VirtualHandsPinchInteractor : MonoBehaviour
     [SerializeField] Transform rayOrigin;
     [SerializeField, Min(0.5f)] float rayLength = 10f;
     [SerializeField, Min(0.0005f)] float rayWidth = 0.005f;
-    [SerializeField] Color rayColor = new Color(0f, 1f, 1f, 1f);
+    [SerializeField] Color rayColor = new Color(0f, 0.627451f, 1f, 1f);
     [SerializeField] Color rayEndColor = new Color(1f, 1f, 1f, 0f);
+    [SerializeField] Color invalidRayColor = new Color(1f, 0.0141509175f, 0.0141509175f, 1f);
+    [SerializeField] Color blockedRayColor = new Color(1f, 0.92156863f, 0.015686275f, 1f);
 
     [Header("Wrist ray origin")]
     [Tooltip("Local offset from the tracked right wrist. Z moves into the palm toward the space between thumb and index finger; Y lowers the ray slightly toward the arm.")]
@@ -80,8 +82,14 @@ public sealed class VirtualHandsPinchInteractor : MonoBehaviour
         rayInteractor.uiPressInput = pinchReader;
 
         lineVisual = rayObject.AddComponent<XRInteractorLineVisual>();
+        lineVisual.overrideInteractorLineOrigin = true;
         lineVisual.overrideInteractorLineLength = true;
         lineVisual.lineLength = rayLength;
+        lineVisual.autoAdjustLineLength = true;
+        lineVisual.minLineLength = 0.5f;
+        lineVisual.useDistanceToHitAsMaxLineLength = true;
+        lineVisual.lineRetractionDelay = 0.5f;
+        lineVisual.lineLengthChangeSpeed = 12f;
         lineVisual.lineWidth = rayWidth;
         lineVisual.lineOriginTransform = rayOrigin;
         ConfigureRayRenderer(rayObject.GetComponent<LineRenderer>());
@@ -95,7 +103,10 @@ public sealed class VirtualHandsPinchInteractor : MonoBehaviour
         visibleRayRenderer = visibleRay.AddComponent<LineRenderer>();
         ConfigureRayRenderer(visibleRayRenderer);
         visibleRayRenderer.positionCount = 2;
-        visibleRayRenderer.enabled = true;
+        // The controller condition uses only XRInteractorLineVisual. Keep
+        // this fallback disabled while that visual exists so it cannot mask
+        // the controller-style red/yellow hit-state colors.
+        visibleRayRenderer.enabled = false;
         ApplyRayColor();
         // Use the same XRI line visual as the controller ray. The separate
         // renderer remains as a fallback for providers that hide XRI visuals
@@ -292,8 +303,10 @@ public sealed class VirtualHandsPinchInteractor : MonoBehaviour
 
         lineVisual.setLineColorGradient = true;
         lineVisual.validColorGradient = gradient;
-        lineVisual.invalidColorGradient = gradient;
-        lineVisual.blockedColorGradient = gradient;
+        Gradient invalidGradient = CreateGradient(invalidRayColor, rayEndColor);
+        Gradient blockedGradient = CreateGradient(blockedRayColor, blockedRayColor);
+        lineVisual.invalidColorGradient = invalidGradient;
+        lineVisual.blockedColorGradient = blockedGradient;
 
         LineRenderer renderer = lineVisual.GetComponent<LineRenderer>();
         if (renderer != null)
@@ -311,6 +324,23 @@ public sealed class VirtualHandsPinchInteractor : MonoBehaviour
         }
     }
 
+    static Gradient CreateGradient(Color start, Color end)
+    {
+        Gradient gradient = new Gradient();
+        gradient.SetKeys(
+            new[]
+            {
+                new GradientColorKey(start, 0f),
+                new GradientColorKey(end, 1f)
+            },
+            new[]
+            {
+                new GradientAlphaKey(start.a, 0f),
+                new GradientAlphaKey(end.a, 1f)
+            });
+        return gradient;
+    }
+
     void OnEnable()
     {
         Active = this;
@@ -319,7 +349,7 @@ public sealed class VirtualHandsPinchInteractor : MonoBehaviour
         if (lineVisual != null)
             lineVisual.enabled = true;
         if (visibleRayRenderer != null)
-            visibleRayRenderer.enabled = true;
+            visibleRayRenderer.enabled = lineVisual == null || !lineVisual.enabled;
         Debug.Log("Virtual hands ray enabled.", this);
     }
 
@@ -359,6 +389,9 @@ public sealed class VirtualHandsPinchInteractor : MonoBehaviour
             lineVisual.lineWidth = rayWidth;
             lineVisual.lineOriginTransform = rayOrigin;
         }
+
+        if (visibleRayRenderer != null)
+            visibleRayRenderer.enabled = lineVisual == null || !lineVisual.enabled;
     }
 
     void LateUpdate()
@@ -377,7 +410,8 @@ public sealed class VirtualHandsPinchInteractor : MonoBehaviour
             return;
 
         Transform origin = rayOrigin != null ? rayOrigin : transform;
-        bool visible = isActiveAndEnabled && origin != null;
+        bool visible = isActiveAndEnabled && origin != null &&
+            (lineVisual == null || !lineVisual.enabled);
         visibleRayRenderer.enabled = visible;
         if (!visible)
             return;
