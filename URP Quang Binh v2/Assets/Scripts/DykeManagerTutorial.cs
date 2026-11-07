@@ -39,6 +39,8 @@ public class DykeManagerTutorial : MonoBehaviour
     [Min(0f)] public float maxFreePlacementDykeLengthMeters;
     [Tooltip("Maximum combined length of all free-placement dykes in metres. Zero means unlimited.")]
     [Min(0f)] public float maxTotalFreePlacementDykeLengthMeters;
+    [Tooltip("Radius used to detect a participant dyke under the virtual-hand ray for pinch-to-destroy.")]
+    [Min(0.01f)] public float virtualHandsDykeHoverRadius = 0.08f;
 
     [Header("For PlayMaker")]
     public int dykeBuilt = 0;
@@ -58,6 +60,7 @@ public class DykeManagerTutorial : MonoBehaviour
     GameObject placementMarker;
     A1P1ScenarioDyke hoveredScenarioDyke;
     DykeLengthLabel futureLengthLabel;
+    readonly RaycastHit[] virtualTutorialRayHits = new RaycastHit[64];
 
     void Awake()
     {
@@ -69,6 +72,11 @@ public class DykeManagerTutorial : MonoBehaviour
     void OnDisable()
     {
         scenarioGrip?.Disable();
+        // Once the tutorial/build manager is disabled, the participant is
+        // back in a question or confidence UI. Restore the normal XRI line
+        // visual so the ray ends at the canvas instead of passing through it.
+        if (VirtualHands != null)
+            VirtualHands.SetTutorialSnapPointRayMode(false);
         SetHoveredScenarioDyke(null);
         if (placementMarker != null) { Destroy(placementMarker); placementMarker = null; }
         HideFutureLengthLabel();
@@ -104,6 +112,13 @@ public class DykeManagerTutorial : MonoBehaviour
             HideFutureLengthLabel();
             return;
         }
+
+        // In the virtual-hands tutorial the two snap colliders are only
+        // logical endpoints.  Do not let their hit distance retract the
+        // visible ray into the hand.  The interactor still reports the hit,
+        // so the existing snap-point placement logic remains unchanged.
+        if (VirtualHands != null)
+            VirtualHands.SetTutorialSnapPointRayMode(IsVirtualHandsMode && IsTutorialSnapPointPhase);
 
         UpdatePlacementMarker();
         UpdateScenarioDykeHover();
@@ -144,6 +159,24 @@ public class DykeManagerTutorial : MonoBehaviour
     bool IsVirtualHandsMode => ParticipantSession.IsCheckedIn &&
         ParticipantSession.InteractionMode == ParticipantInteractionMode.Virtual_Hands;
 
+    bool IsTutorialSnapPointPhase
+    {
+        get
+        {
+            if (freePlacement || snapPoints == null)
+                return false;
+
+            for (int i = 0; i < snapPoints.Length; i++)
+            {
+                Collider snapPoint = snapPoints[i];
+                if (snapPoint != null && snapPoint.gameObject.activeInHierarchy)
+                    return true;
+            }
+
+            return false;
+        }
+    }
+
     VirtualHandsPinchInteractor VirtualHands => VirtualHandsPinchInteractor.Active;
 
     XRRayInteractor ActiveRayInteractor => IsVirtualHandsMode && VirtualHands != null &&
@@ -154,11 +187,14 @@ public class DykeManagerTutorial : MonoBehaviour
         XRRayInteractor activeRay = ActiveRayInteractor;
         if (activeRay == null || activeRay.rayOriginTransform == null) return null;
         Transform origin = activeRay.rayOriginTransform;
-        RaycastHit[] hits = Physics.RaycastAll(origin.position, origin.forward, 100f, ~0, QueryTriggerInteraction.Collide);
+        RaycastHit[] hits = Physics.SphereCastAll(origin.position,
+            Mathf.Max(0.01f, virtualHandsDykeHoverRadius), origin.forward,
+            100f, ~0, QueryTriggerInteraction.Collide);
         A1P1ScenarioDyke closestDyke = null;
         float closestDistance = float.MaxValue;
         foreach (RaycastHit hit in hits)
         {
+            if (hit.collider == null) continue;
             A1P1ScenarioDyke dyke = hit.collider.GetComponentInParent<A1P1ScenarioDyke>();
             if (dyke != null && hit.distance < closestDistance) { closestDyke = dyke; closestDistance = hit.distance; }
         }
@@ -175,7 +211,9 @@ public class DykeManagerTutorial : MonoBehaviour
 
     void UpdatePlacementMarker()
     {
-        if (!freePlacement || !TryGetPlacementTerrainHit(out RaycastHit hit))
+        bool showVirtualTutorialMarker = IsVirtualHandsMode && IsTutorialSnapPointPhase;
+        if ((!freePlacement && !showVirtualTutorialMarker) ||
+            !TryGetTerrainMarkerHit(out RaycastHit hit))
         {
             if (placementMarker != null) placementMarker.SetActive(false);
             return;
@@ -185,17 +223,49 @@ public class DykeManagerTutorial : MonoBehaviour
         {
             placementMarker = GameObject.CreatePrimitive(PrimitiveType.Sphere);
             placementMarker.name = "A1P1_Dyke_Placement_Point";
-            placementMarker.transform.localScale = Vector3.one * .12f;
+            placementMarker.transform.localScale = Vector3.one * .18f;
             Collider markerCollider = placementMarker.GetComponent<Collider>();
             if (markerCollider != null) markerCollider.enabled = false;
             Renderer markerRenderer = placementMarker.GetComponent<Renderer>();
             Shader shader = Shader.Find("Universal Render Pipeline/Unlit");
             if (shader == null) shader = Shader.Find("Sprites/Default");
-            markerRenderer.material = new Material(shader) { color = new Color(.05f, 1f, .25f, 1f) };
+            Material markerMaterial = new Material(shader) { name = "Virtual Hands Terrain Cursor Material" };
+            Color markerColor = new Color(.1f, .8f, 1f, 1f);
+            if (markerMaterial.HasProperty("_BaseColor")) markerMaterial.SetColor("_BaseColor", markerColor);
+            if (markerMaterial.HasProperty("_Color")) markerMaterial.SetColor("_Color", markerColor);
+            markerMaterial.renderQueue = 3000;
+            markerRenderer.material = markerMaterial;
         }
 
         placementMarker.SetActive(true);
-        placementMarker.transform.position = hit.point + hit.normal * .025f;
+        // Match the controller/gamepad cursor: a visible cyan sphere slightly
+        // above the terrain, rather than a point buried in the mesh.
+        placementMarker.transform.position = SnapToTerrainEdge(hit.point) + Vector3.up * .08f;
+    }
+
+    bool TryGetTerrainMarkerHit(out RaycastHit terrainHit)
+    {
+        terrainHit = default;
+        if (freePlacement)
+            return TryGetPlacementTerrainHit(out terrainHit);
+
+        XRRayInteractor activeRay = ActiveRayInteractor;
+        if (activeRay == null || activeRay.rayOriginTransform == null)
+            return false;
+
+        RaycastHit[] hits = Physics.RaycastAll(activeRay.rayOriginTransform.position,
+            activeRay.rayOriginTransform.forward, 100f, ~0, QueryTriggerInteraction.Ignore);
+        float closestDistance = float.MaxValue;
+        bool found = false;
+        foreach (RaycastHit hit in hits)
+        {
+            if (hit.distance >= closestDistance || !IsTerrainHit(hit))
+                continue;
+            closestDistance = hit.distance;
+            terrainHit = hit;
+            found = true;
+        }
+        return found;
     }
 
     bool IsTerrainHit(RaycastHit hit)
@@ -238,7 +308,18 @@ public class DykeManagerTutorial : MonoBehaviour
         if (activeRay == null || activeRay.rayOriginTransform == null) return false;
 
         if (!freePlacement)
+        {
+            // The virtual-hands ray has a deliberately independent visual in
+            // the tutorial, so UI panels cannot consume its physical hit.
+            // Read the same straight ray directly for the preview. Snap
+            // colliders remain ordinary points in this hit list; they are not
+            // used to change the ray's origin or direction.
+            if (IsVirtualHandsMode &&
+                TryGetVirtualHandsTutorialHit(activeRay.rayOriginTransform, out terrainHit))
+                return true;
+
             return activeRay.TryGetCurrent3DRaycastHit(out terrainHit);
+        }
 
         Transform origin = activeRay.rayOriginTransform;
         RaycastHit[] hits = Physics.RaycastAll(origin.position, origin.forward, 100f, ~0, QueryTriggerInteraction.Ignore);
@@ -254,20 +335,111 @@ public class DykeManagerTutorial : MonoBehaviour
         return found;
     }
 
+    bool TryGetVirtualHandsTutorialHit(Transform origin, out RaycastHit hit)
+    {
+        hit = default;
+        if (origin == null) return false;
+
+        int hitCount = Physics.RaycastNonAlloc(
+            origin.position,
+            origin.forward,
+            virtualTutorialRayHits,
+            100f,
+            ~0,
+            QueryTriggerInteraction.Collide);
+
+        float closestDistance = float.MaxValue;
+        bool found = false;
+        for (int i = 0; i < hitCount; i++)
+        {
+            RaycastHit candidate = virtualTutorialRayHits[i];
+            Collider collider = candidate.collider;
+            if (collider == null || candidate.distance >= closestDistance)
+                continue;
+
+            // Do not let the hand mesh, the ray object, or the virtual rig
+            // itself become the moving endpoint when the ray starts close to
+            // the tracked hand.
+            if (VirtualHands != null &&
+                (collider.transform == VirtualHands.transform ||
+                 collider.transform.IsChildOf(VirtualHands.transform)))
+                continue;
+
+            closestDistance = candidate.distance;
+            hit = candidate;
+            found = true;
+        }
+
+        return found;
+    }
+
     void ProcessFreePlacementGrip()
     {
-        if (!freePlacement) return;
-
         bool pressed = IsVirtualHandsMode
             ? VirtualHands != null && VirtualHands.PinchStartedThisFrame
             : scenarioGrip != null && scenarioGrip.WasPressedThisFrame();
         if (!pressed) return;
+
+        // The authored tutorial dyke is not an A1P1ScenarioDyke and therefore
+        // is not part of the free-placement list. Detect it directly under
+        // the virtual-hand ray so a pinch can destroy it without requiring the
+        // hand to be stretched until the XRI hover event fires.
+        if (!freePlacement && IsVirtualHandsMode)
+        {
+            if (FindTutorialDykeUnderRay() != null)
+                TryDestroyTutorialDyke();
+            return;
+        }
+
+        if (!freePlacement) return;
 
         A1P1ScenarioDyke scenarioDyke = FindScenarioDykeUnderRay();
         if (scenarioDyke != null)
         {
             TryDestroyFreePlacementDyke(scenarioDyke);
         }
+    }
+
+    GameObject FindTutorialDykeUnderRay()
+    {
+        if (dykeToDestroy == null || !dykeToDestroy.activeInHierarchy)
+            return null;
+
+        XRRayInteractor activeRay = ActiveRayInteractor;
+        if (activeRay == null || activeRay.rayOriginTransform == null)
+            return null;
+
+        RaycastHit[] hits = Physics.SphereCastAll(activeRay.rayOriginTransform.position,
+            Mathf.Max(0.01f, virtualHandsDykeHoverRadius),
+            activeRay.rayOriginTransform.forward, 100f, ~0, QueryTriggerInteraction.Collide);
+        float closestDistance = float.MaxValue;
+        foreach (RaycastHit hit in hits)
+        {
+            if (hit.collider == null || hit.distance >= closestDistance)
+                continue;
+            Transform hitTransform = hit.collider.transform;
+            if (hitTransform == dykeToDestroy.transform ||
+                hitTransform.IsChildOf(dykeToDestroy.transform))
+                closestDistance = hit.distance;
+            else
+                continue;
+        }
+
+        return closestDistance < float.MaxValue ? dykeToDestroy : null;
+    }
+
+    void TryDestroyTutorialDyke()
+    {
+        if (dykeToDestroy == null)
+            return;
+
+        ScenarioDykeLength length = dykeToDestroy.GetComponent<ScenarioDykeLength>();
+        FloodStudyLogger.RecordDykeDestroyed(length);
+        FloodAudio.PlayDykeRemoved();
+        dykeDestroyed++;
+        GameObject target = dykeToDestroy;
+        dykeToDestroy = null;
+        Destroy(target);
     }
 
     void ProcessRightHandTrigger()
@@ -347,6 +519,19 @@ public class DykeManagerTutorial : MonoBehaviour
             Vector2[] pts = new Vector2[5];
             Vector3 _endPoint = SnapToTerrainEdge(raycastHit.point);
             float horizontalDistance = HorizontalDistance(startPoint, _endPoint);
+            bool validPreview = freePlacement
+                ? CanBuildFreePlacementDyke(startPoint, _endPoint)
+                : snapPoints != null && snapPoints.Contains(raycastHit.collider) &&
+                  raycastHit.collider != startCollider &&
+                  CanBuildTutorialDyke(startPoint, raycastHit.collider.transform.position);
+
+            // Match the controller/gamepad preview: a valid dynamic dyke is
+            // cyan/green, while a length-limit or invalid-endpoint preview is
+            // red and will be rejected on release.
+            propFutureDike.red = validPreview ? 0 : 255;
+            propFutureDike.green = validPreview ? 255 : 0;
+            propFutureDike.blue = 0;
+
             EnsureFutureLengthLabel();
             futureLengthLabel.SetPreview(startPoint, _endPoint, horizontalDistance);
             Vector2 direction = new Vector2(_endPoint.x - startPoint.x, _endPoint.z - startPoint.z).normalized;
@@ -606,7 +791,7 @@ public class DykeManagerTutorial : MonoBehaviour
     Vector3 SnapToTerrainEdge(Vector3 point)
     {
         EnsurePlacementTerrainReference();
-        if (!freePlacement || terrainEdgeSnapDistanceMeters <= 0f || placementTerrainRenderer == null)
+        if (terrainEdgeSnapDistanceMeters <= 0f || placementTerrainRenderer == null)
             return point;
 
         Bounds bounds = placementTerrainRenderer.bounds;

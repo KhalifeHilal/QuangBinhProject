@@ -1,7 +1,9 @@
+using System.Collections.Generic;
 using Oculus.Interaction.Input;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.Rendering;
+using UnityEngine.UI;
 using UnityEngine.XR.Interaction.Toolkit;
 using UnityEngine.XR.Interaction.Toolkit.Inputs.Readers;
 using UnityEngine.XR.Interaction.Toolkit.Interactors;
@@ -23,7 +25,7 @@ public sealed class VirtualHandsPinchInteractor : MonoBehaviour
 
     [Header("Ray")]
     [SerializeField] Transform rayOrigin;
-    [SerializeField, Min(0.5f)] float rayLength = 10f;
+    [SerializeField, Min(0.5f)] float rayLength = 100f;
     [SerializeField, Min(0.0005f)] float rayWidth = 0.005f;
     [SerializeField] Color rayColor = new Color(0f, 0.627451f, 1f, 1f);
     [SerializeField] Color rayEndColor = new Color(1f, 1f, 1f, 0f);
@@ -35,6 +37,11 @@ public sealed class VirtualHandsPinchInteractor : MonoBehaviour
     [SerializeField] Vector3 wristRayLocalOffset = new Vector3(-0.025f, -0.055f, 0.095f);
     [SerializeField] Vector3 wristRayLocalEulerAngles;
 
+    [Header("Pinch stability")]
+    [Range(0f, 1f)] [SerializeField] float pinchStartStrength = 0.55f;
+    [Range(0f, 1f)] [SerializeField] float pinchReleaseStrength = 0.35f;
+    [Min(0f)] [SerializeField] float trackingGracePeriod = 0.12f;
+
     XRRayInteractor rayInteractor;
     XRInputButtonReader pinchReader;
     XRInteractorLineVisual lineVisual;
@@ -42,7 +49,12 @@ public sealed class VirtualHandsPinchInteractor : MonoBehaviour
     Material rayMaterial;
     bool rayOriginCreatedByScript;
     bool previousPinching;
+    bool stablePinching;
+    float lastTrackedPinchTime = -Mathf.Infinity;
     bool warnedMissingHand;
+    Slider activeSlider;
+    Graphic[] cachedUiGraphics;
+    float nextUiGraphicsRefresh;
 
     public static VirtualHandsPinchInteractor Active { get; private set; }
     public XRRayInteractor RayInteractor => rayInteractor;
@@ -51,9 +63,35 @@ public sealed class VirtualHandsPinchInteractor : MonoBehaviour
     public bool PinchStartedThisFrame { get; private set; }
     public bool PinchReleasedThisFrame { get; private set; }
 
+    /// <summary>
+    /// Keeps the visible hand ray at its authored length while the tutorial
+    /// uses the two dyke snap colliders.  The XR ray still reports the hit to
+    /// DykeManagerTutorial; only the line visual is prevented from retracting
+    /// to the snap collider (which made the ray appear to snap into the hand).
+    /// </summary>
+    public void SetTutorialSnapPointRayMode(bool enabled)
+    {
+        if (lineVisual == null && visibleRayRenderer == null)
+            return;
+
+        // Always use the custom renderer for virtual hands. The XRI line
+        // visual stops at the first 3D collider (terrain, buildings, or a
+        // snap point), while the intended hand ray should remain at full
+        // length and stop only at a UI canvas. The XRRayInteractor itself
+        // stays enabled for UI and placement hit testing.
+        if (lineVisual != null)
+            lineVisual.enabled = false;
+        if (visibleRayRenderer != null)
+            visibleRayRenderer.enabled = true;
+    }
+
     void Awake()
     {
         Active = this;
+
+        // Keep the virtual-hand ray long enough to cross the complete map.
+        // It is shortened visually only when the UI endpoint is found.
+        rayLength = Mathf.Max(rayLength, 100f);
 
         ResolveCameraRig();
         ResolveRightHand();
@@ -95,9 +133,8 @@ public sealed class VirtualHandsPinchInteractor : MonoBehaviour
         ConfigureRayRenderer(rayObject.GetComponent<LineRenderer>());
         ApplyRayColor();
 
-        // XRI's line visual can hide itself while the hand/provider is still
-        // initializing. Keep a separate renderer for a guaranteed visible
-        // cyan ray while XRRayInteractor still handles all hit testing.
+        // Keep a separate renderer for a guaranteed visible cyan ray while
+        // XRRayInteractor still handles all hit testing and UI interaction.
         GameObject visibleRay = new GameObject("Virtual Hands Visible Ray");
         visibleRay.transform.SetParent(transform, false);
         visibleRayRenderer = visibleRay.AddComponent<LineRenderer>();
@@ -108,10 +145,10 @@ public sealed class VirtualHandsPinchInteractor : MonoBehaviour
         // the controller-style red/yellow hit-state colors.
         visibleRayRenderer.enabled = false;
         ApplyRayColor();
-        // Use the same XRI line visual as the controller ray. The separate
-        // renderer remains as a fallback for providers that hide XRI visuals
-        // during hand-tracking startup.
-        lineVisual.enabled = true;
+        // The custom renderer below is used instead of XRInteractorLineVisual
+        // so 3D colliders cannot shorten the visible hand ray.
+        lineVisual.enabled = false;
+        visibleRayRenderer.enabled = true;
 
         Debug.Log($"Virtual hands ray ready. Origin: {(rayOrigin != null ? rayOrigin.name : "fallback")}, length: {rayLength:0.##} m", this);
     }
@@ -318,9 +355,12 @@ public sealed class VirtualHandsPinchInteractor : MonoBehaviour
 
         if (visibleRayRenderer != null)
         {
-            visibleRayRenderer.colorGradient = gradient;
+            // The hand ray must remain visibly continuous all the way to the
+            // UI hit. Do not fade its endpoint like the controller line does.
+            Gradient visibleGradient = CreateGradient(rayColor, rayColor);
+            visibleRayRenderer.colorGradient = visibleGradient;
             visibleRayRenderer.startColor = rayColor;
-            visibleRayRenderer.endColor = rayEndColor;
+            visibleRayRenderer.endColor = rayColor;
         }
     }
 
@@ -347,9 +387,9 @@ public sealed class VirtualHandsPinchInteractor : MonoBehaviour
         if (rayInteractor != null)
             rayInteractor.enabled = true;
         if (lineVisual != null)
-            lineVisual.enabled = true;
+            lineVisual.enabled = false;
         if (visibleRayRenderer != null)
-            visibleRayRenderer.enabled = lineVisual == null || !lineVisual.enabled;
+            visibleRayRenderer.enabled = true;
         Debug.Log("Virtual hands ray enabled.", this);
     }
 
@@ -359,9 +399,7 @@ public sealed class VirtualHandsPinchInteractor : MonoBehaviour
         EnsureRayOrigin();
         ResolveRightWristIfAvailable();
 
-        bool pinching = rightHand != null && rightHand.isActiveAndEnabled &&
-            rightHand.IsTracked && rightHand.IsDataHighConfidence &&
-            rightHand.GetFingerIsPinching(OVRHand.HandFinger.Index);
+        bool pinching = ReadStablePinch();
 
         if (rightHand == null && !warnedMissingHand)
         {
@@ -390,12 +428,15 @@ public sealed class VirtualHandsPinchInteractor : MonoBehaviour
             lineVisual.lineOriginTransform = rayOrigin;
         }
 
+        if (lineVisual != null)
+            lineVisual.enabled = false;
         if (visibleRayRenderer != null)
-            visibleRayRenderer.enabled = lineVisual == null || !lineVisual.enabled;
+            visibleRayRenderer.enabled = true;
     }
 
     void LateUpdate()
     {
+        UpdateVirtualSliderDrag();
         UpdateVisibleRay();
 
         // PlayMaker can restore the authored tutorial wording whenever a
@@ -404,24 +445,166 @@ public sealed class VirtualHandsPinchInteractor : MonoBehaviour
         GamepadUIInput.RefreshTutorialInstructions();
     }
 
+    void UpdateVirtualSliderDrag()
+    {
+        if (!IsPinching)
+        {
+            activeSlider = null;
+            return;
+        }
+
+        if (activeSlider == null && rayInteractor != null &&
+            rayInteractor.TryGetCurrentUIRaycastResult(out var currentUiHit))
+        {
+            if (currentUiHit.gameObject != null)
+                activeSlider = currentUiHit.gameObject.GetComponentInParent<Slider>();
+        }
+
+        if (activeSlider == null || rayOrigin == null ||
+            !activeSlider.gameObject.activeInHierarchy)
+            return;
+
+        RectTransform sliderRect = activeSlider.GetComponent<RectTransform>();
+        if (sliderRect == null)
+            return;
+
+        // Project the hand ray onto the slider's plane. This keeps the slider
+        // draggable even when the ray briefly leaves the handle while the
+        // pinch is held, which is common with hand-tracking jitter.
+        Plane sliderPlane = new Plane(sliderRect.forward, sliderRect.position);
+        Ray handRay = new Ray(rayOrigin.position, rayOrigin.forward);
+        if (!sliderPlane.Raycast(handRay, out float distance) || distance < 0f)
+            return;
+
+        Vector3 localPoint = sliderRect.InverseTransformPoint(handRay.GetPoint(distance));
+        Rect rect = sliderRect.rect;
+        float normalized;
+        if (activeSlider.direction == Slider.Direction.BottomToTop ||
+            activeSlider.direction == Slider.Direction.TopToBottom)
+        {
+            normalized = Mathf.InverseLerp(rect.yMin, rect.yMax, localPoint.y);
+            if (activeSlider.direction == Slider.Direction.TopToBottom)
+                normalized = 1f - normalized;
+        }
+        else
+        {
+            normalized = Mathf.InverseLerp(rect.xMin, rect.xMax, localPoint.x);
+            if (activeSlider.direction == Slider.Direction.RightToLeft)
+                normalized = 1f - normalized;
+        }
+
+        activeSlider.value = Mathf.Lerp(activeSlider.minValue, activeSlider.maxValue, normalized);
+    }
+
     void UpdateVisibleRay()
     {
         if (visibleRayRenderer == null)
             return;
 
         Transform origin = rayOrigin != null ? rayOrigin : transform;
-        bool visible = isActiveAndEnabled && origin != null &&
-            (lineVisual == null || !lineVisual.enabled);
+        bool visible = isActiveAndEnabled && origin != null;
         visibleRayRenderer.enabled = visible;
         if (!visible)
             return;
 
         Vector3 start = origin.position;
         Vector3 end = start + origin.forward * rayLength;
+        float closestUiDistance = rayLength;
+
+        // Use only the UI result for the visible endpoint.  A terrain or
+        // snap-point collider may still be returned by the XR interactor for
+        // dyke construction, but it must not shorten the hand ray.
+        if (rayInteractor != null &&
+            rayInteractor.TryGetCurrentUIRaycastResult(out var uiRaycastResult))
+        {
+            Vector3 toUi = uiRaycastResult.worldPosition - start;
+            float distanceAlongRay = Vector3.Dot(toUi, origin.forward);
+            if (distanceAlongRay > 0f && distanceAlongRay <= closestUiDistance)
+            {
+                closestUiDistance = distanceAlongRay;
+                end = uiRaycastResult.worldPosition;
+            }
+        }
+
+        // Some generated panels intentionally disable Image.raycastTarget on
+        // their background. The XR UI module can therefore still interact
+        // with their buttons but has no UI endpoint for the visual ray. Use a
+        // cached world-space Graphic pass as a visual-only fallback so every
+        // panel, slider, and feedback canvas stops the ray naturally.
+        if (TryGetClosestWorldSpaceGraphicHit(start, origin.forward, closestUiDistance,
+            out Vector3 graphicPoint, out float graphicDistance))
+        {
+            end = graphicPoint;
+        }
+
         visibleRayRenderer.positionCount = 2;
         visibleRayRenderer.SetPosition(0, start);
         visibleRayRenderer.SetPosition(1, end);
         visibleRayRenderer.widthMultiplier = rayWidth;
+    }
+
+    bool TryGetClosestWorldSpaceGraphicHit(Vector3 origin, Vector3 direction,
+        float maxDistance, out Vector3 hitPoint, out float hitDistance)
+    {
+        hitPoint = default;
+        hitDistance = maxDistance;
+        RefreshUiGraphicsCache();
+        if (cachedUiGraphics == null)
+            return false;
+
+        Ray ray = new Ray(origin, direction);
+        bool found = false;
+        for (int i = 0; i < cachedUiGraphics.Length; i++)
+        {
+            Graphic graphic = cachedUiGraphics[i];
+            if (graphic == null || !graphic.isActiveAndEnabled || graphic.canvas == null ||
+                graphic.canvas.renderMode != RenderMode.WorldSpace)
+                continue;
+
+            RectTransform rect = graphic.rectTransform;
+            if (rect == null || rect.rect.width <= 0f || rect.rect.height <= 0f)
+                continue;
+
+            Plane plane = new Plane(rect.forward, rect.position);
+            if (!plane.Raycast(ray, out float distance) || distance <= 0f || distance > hitDistance)
+                continue;
+
+            Vector3 localPoint = rect.InverseTransformPoint(ray.GetPoint(distance));
+            if (!rect.rect.Contains(new Vector2(localPoint.x, localPoint.y)))
+                continue;
+
+            hitDistance = distance;
+            hitPoint = ray.GetPoint(distance);
+            found = true;
+        }
+
+        return found;
+    }
+
+    void RefreshUiGraphicsCache()
+    {
+        if (Time.unscaledTime < nextUiGraphicsRefresh)
+            return;
+
+        nextUiGraphicsRefresh = Time.unscaledTime + 0.2f;
+        List<Graphic> graphics = new List<Graphic>(64);
+        Canvas[] canvases = FindObjectsByType<Canvas>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+        for (int i = 0; i < canvases.Length; i++)
+        {
+            Canvas canvas = canvases[i];
+            if (canvas == null || !canvas.isActiveAndEnabled || canvas.renderMode != RenderMode.WorldSpace)
+                continue;
+
+            Graphic[] canvasGraphics = canvas.GetComponentsInChildren<Graphic>(false);
+            for (int j = 0; j < canvasGraphics.Length; j++)
+            {
+                Graphic graphic = canvasGraphics[j];
+                if (graphic != null && graphic.isActiveAndEnabled)
+                    graphics.Add(graphic);
+            }
+        }
+
+        cachedUiGraphics = graphics.ToArray();
     }
 
     public bool TryGetCurrent3DRaycastHit(out RaycastHit hit)
@@ -439,6 +622,9 @@ public sealed class VirtualHandsPinchInteractor : MonoBehaviour
         PinchStartedThisFrame = false;
         PinchReleasedThisFrame = false;
         previousPinching = false;
+        stablePinching = false;
+        lastTrackedPinchTime = -Mathf.Infinity;
+        activeSlider = null;
         if (rayInteractor != null)
             rayInteractor.enabled = false;
         if (lineVisual != null)
@@ -461,5 +647,33 @@ public sealed class VirtualHandsPinchInteractor : MonoBehaviour
     {
         rayLength = Mathf.Max(0.5f, rayLength);
         rayWidth = Mathf.Max(0.0005f, rayWidth);
+        pinchReleaseStrength = Mathf.Min(pinchReleaseStrength, pinchStartStrength);
+        trackingGracePeriod = Mathf.Max(0f, trackingGracePeriod);
+    }
+
+    bool ReadStablePinch()
+    {
+        bool handAvailable = rightHand != null && rightHand.isActiveAndEnabled &&
+            rightHand.IsTracked && rightHand.IsDataHighConfidence;
+        if (!handAvailable)
+        {
+            // Hand tracking can briefly lose confidence while the user drags
+            // a slider. Keep the press alive for a short grace period instead
+            // of sending a false release to the XR UI module.
+            return stablePinching && Time.unscaledTime - lastTrackedPinchTime <= trackingGracePeriod;
+        }
+
+        bool rawPinching = rightHand.GetFingerIsPinching(OVRHand.HandFinger.Index);
+        float strength = rightHand.GetFingerPinchStrength(OVRHand.HandFinger.Index);
+
+        if (!stablePinching)
+            stablePinching = rawPinching || strength >= pinchStartStrength;
+        else
+            stablePinching = rawPinching || strength >= pinchReleaseStrength;
+
+        if (stablePinching)
+            lastTrackedPinchTime = Time.unscaledTime;
+
+        return stablePinching;
     }
 }

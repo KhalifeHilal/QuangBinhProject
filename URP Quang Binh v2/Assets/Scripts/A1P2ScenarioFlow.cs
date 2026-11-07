@@ -429,7 +429,10 @@ static class ScenarioFeedbackStage
         SetSolutionObjectsActive(activeSolutionNames, true);
 
         string safeName = scenarioTitle.Replace("|", "_").Replace(" ", "_");
-        panel = P2Panel.CanvasRoot("FeedbackScenario_" + safeName, new Vector2(1300, 520));
+        // Leave a separate row for the optional Virtual Hands start button
+        // and the Continue button. Previously both rows were only 40 px
+        // apart, so the controls overlapped in feedback scenarios.
+        panel = P2Panel.CanvasRoot("FeedbackScenario_" + safeName, new Vector2(1300, 620));
         ScenarioFeedbackStageController controller = panel.AddComponent<ScenarioFeedbackStageController>();
         controller.Begin(floodPrefab, simulationDuration, ScenarioIdFromTitle(scenarioTitle), activeSolutionNames);
         FloodLearningUI.Text("Title", panel.transform, scenarioTitle + "  |  Feedback scenario", 40,
@@ -447,7 +450,7 @@ static class ScenarioFeedbackStage
         if (ParticipantInput.IsVirtualHandsParticipant)
             FloodLearningUI.Button("StartFeedbackSimulation", panel.transform, "Start simulation", -335, 76, 28,
                 controller.StartSimulationFromUI, 420);
-        UnityEngine.UI.Button continueButton = FloodLearningUI.Button("Continue", panel.transform, "Continue", -375, 82, 29,
+        UnityEngine.UI.Button continueButton = FloodLearningUI.Button("Continue", panel.transform, "Continue", -470, 82, 29,
             () =>
             {
                 Close();

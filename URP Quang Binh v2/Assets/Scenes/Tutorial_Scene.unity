@@ -336927,7 +336927,7 @@ MonoBehaviour:
   cameraRig: {fileID: 0}
   rightHand: {fileID: 0}
   rayOrigin: {fileID: 0}
-  rayLength: 10
+  rayLength: 100
   rayWidth: 0.005
   rayColor: {r: 0, g: 0.627451, b: 1, a: 1}
   rayEndColor: {r: 1, g: 1, b: 1, a: 0}
