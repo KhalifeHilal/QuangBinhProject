@@ -1,6 +1,7 @@
 using Oculus.Interaction.Input;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.Rendering;
 using UnityEngine.XR.Interaction.Toolkit;
 using UnityEngine.XR.Interaction.Toolkit.Inputs.Readers;
 using UnityEngine.XR.Interaction.Toolkit.Interactors;
@@ -18,13 +19,14 @@ public sealed class VirtualHandsPinchInteractor : MonoBehaviour
     [Header("Rig (resolved automatically when empty)")]
     [SerializeField] OVRCameraRig cameraRig;
     [SerializeField] OVRHand rightHand;
+    [SerializeField] OVRSkeleton rightSkeleton;
 
     [Header("Ray")]
     [SerializeField] Transform rayOrigin;
-    [SerializeField, Min(0.5f)] float rayLength = 12f;
-    [SerializeField, Min(0.0005f)] float rayWidth = 0.0035f;
+    [SerializeField, Min(0.5f)] float rayLength = 10f;
+    [SerializeField, Min(0.0005f)] float rayWidth = 0.005f;
     [SerializeField] Color rayColor = new Color(0f, 1f, 1f, 1f);
-    [SerializeField] Color rayEndColor = new Color(0f, 0.75f, 1f, 0.75f);
+    [SerializeField] Color rayEndColor = new Color(1f, 1f, 1f, 0f);
 
     [Header("Wrist ray origin")]
     [Tooltip("Local offset from the tracked right wrist. Z points toward the fingers; Y lowers the ray toward the arm.")]
@@ -34,6 +36,7 @@ public sealed class VirtualHandsPinchInteractor : MonoBehaviour
     XRRayInteractor rayInteractor;
     XRInputButtonReader pinchReader;
     XRInteractorLineVisual lineVisual;
+    LineRenderer visibleRayRenderer;
     Material rayMaterial;
     bool rayOriginCreatedByScript;
     bool previousPinching;
@@ -50,34 +53,15 @@ public sealed class VirtualHandsPinchInteractor : MonoBehaviour
     {
         Active = this;
 
-        if (cameraRig == null)
-            cameraRig = GetComponentInChildren<OVRCameraRig>(true);
-        if (cameraRig == null)
-            cameraRig = FindFirstObjectByType<OVRCameraRig>(FindObjectsInactive.Include);
-
+        ResolveCameraRig();
         ResolveRightHand();
-
-        if (rayOrigin == null)
-        {
-            // The virtual rig's rightHandAnchor is a right-hand pose even
-            // before hand tracking has reported an OVRHand. Create the ray
-            // there immediately so the visual is never missing, then move
-            // it to the tracked wrist as soon as that OVRHand is available.
-            Transform wrist = rightHand != null ? rightHand.transform : cameraRig != null ? cameraRig.rightHandAnchor : transform;
-            if (wrist != null)
-            {
-                GameObject wristOrigin = new GameObject("Virtual Hands Wrist Ray Origin");
-                wristOrigin.transform.SetParent(wrist, false);
-                wristOrigin.transform.localPosition = rightHand != null ? wristRayLocalOffset : Vector3.zero;
-                wristOrigin.transform.localRotation = Quaternion.Euler(wristRayLocalEulerAngles);
-                rayOrigin = wristOrigin.transform;
-                rayOriginCreatedByScript = true;
-            }
-        }
+        EnsureRayOrigin();
 
         GameObject rayObject = new GameObject("Virtual Hands Pinch Ray");
         rayObject.transform.SetParent(transform, false);
-        if (FindFirstObjectByType<XRInteractionManager>(FindObjectsInactive.Include) == null)
+        XRInteractionManager interactionManager =
+            FindFirstObjectByType<XRInteractionManager>(FindObjectsInactive.Include);
+        if (interactionManager == null || !interactionManager.isActiveAndEnabled)
         {
             GameObject managerObject = new GameObject("Virtual Hands XR Interaction Manager");
             managerObject.AddComponent<XRInteractionManager>();
@@ -102,15 +86,30 @@ public sealed class VirtualHandsPinchInteractor : MonoBehaviour
         lineVisual.lineOriginTransform = rayOrigin;
         ConfigureRayRenderer(rayObject.GetComponent<LineRenderer>());
         ApplyRayColor();
+
+        // XRI's line visual can hide itself while the hand/provider is still
+        // initializing. Keep a separate renderer for a guaranteed visible
+        // cyan ray while XRRayInteractor still handles all hit testing.
+        GameObject visibleRay = new GameObject("Virtual Hands Visible Ray");
+        visibleRay.transform.SetParent(transform, false);
+        visibleRayRenderer = visibleRay.AddComponent<LineRenderer>();
+        ConfigureRayRenderer(visibleRayRenderer);
+        visibleRayRenderer.positionCount = 2;
+        visibleRayRenderer.enabled = true;
+        ApplyRayColor();
+        // Use the same XRI line visual as the controller ray. The separate
+        // renderer remains as a fallback for providers that hide XRI visuals
+        // during hand-tracking startup.
         lineVisual.enabled = true;
+
+        Debug.Log($"Virtual hands ray ready. Origin: {(rayOrigin != null ? rayOrigin.name : "fallback")}, length: {rayLength:0.##} m", this);
     }
 
     void ResolveRightHand()
     {
-        if (rightHand != null)
-            return;
+        ResolveCameraRig();
 
-        if (cameraRig != null)
+        if (rightHand == null && cameraRig != null)
         {
             foreach (OVRHand hand in cameraRig.GetComponentsInChildren<OVRHand>(true))
             {
@@ -124,7 +123,7 @@ public sealed class VirtualHandsPinchInteractor : MonoBehaviour
 
         if (rightHand == null)
         {
-            foreach (OVRHand hand in FindObjectsByType<OVRHand>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            foreach (OVRHand hand in GetComponentsInChildren<OVRHand>(true))
             {
                 if (hand != null && hand.GetHand() == OVRPlugin.Hand.HandRight)
                 {
@@ -134,18 +133,94 @@ public sealed class VirtualHandsPinchInteractor : MonoBehaviour
             }
         }
 
-        if (rightHand != null && rayOrigin == null)
+        if (rightHand != null && rightSkeleton == null)
         {
-            GameObject wristOrigin = new GameObject("Virtual Hands Wrist Ray Origin");
-            wristOrigin.transform.SetParent(rightHand.transform, false);
-            wristOrigin.transform.localPosition = wristRayLocalOffset;
-            wristOrigin.transform.localRotation = Quaternion.Euler(wristRayLocalEulerAngles);
+            rightSkeleton = rightHand.GetComponentInChildren<OVRSkeleton>(true);
+
+            if (rightSkeleton == null)
+            {
+                OVRSkeleton[] skeletons = GetComponentsInChildren<OVRSkeleton>(true);
+                for (int i = 0; i < skeletons.Length; i++)
+                {
+                    OVRSkeleton skeleton = skeletons[i];
+                    if (skeleton != null && skeleton.GetSkeletonType() == OVRSkeleton.SkeletonType.HandRight)
+                    {
+                        rightSkeleton = skeleton;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    void ResolveCameraRig()
+    {
+        // Resolve only inside this VR_Hand_Rig. Falling back to a global
+        // OVRCameraRig could accidentally attach the ray to the controller
+        // rig that is used for check-in.
+        if (cameraRig == null)
+            cameraRig = GetComponentInChildren<OVRCameraRig>(true);
+    }
+
+    void EnsureRayOrigin()
+    {
+        if (rayOrigin != null && !rayOriginCreatedByScript)
+            return;
+
+        Transform trackedWrist = FindRightWristTransform();
+        Transform wrist = trackedWrist;
+        if (wrist == null)
+            // The OVRCameraRig hand anchor is the correct tracked fallback
+            // while the hand skeleton is still initializing. The OVRHand
+            // provider object itself can sit at tracking-space origin.
+            wrist = cameraRig != null ? cameraRig.rightHandAnchor :
+                rightHand != null ? rightHand.transform : transform;
+
+        if (wrist == null)
+            return;
+
+        if (rayOrigin == null)
+        {
+            GameObject wristOrigin = new GameObject("VR Hand Ray Origin");
             rayOrigin = wristOrigin.transform;
             rayOriginCreatedByScript = true;
         }
-        else if (rightHand != null && rayOriginCreatedByScript)
+
+        if (rayOrigin.parent != wrist)
+            rayOrigin.SetParent(wrist, false);
+
+        bool usingCameraAnchor = trackedWrist == null && cameraRig != null && wrist == cameraRig.rightHandAnchor;
+        rayOrigin.localPosition = usingCameraAnchor ? Vector3.zero : wristRayLocalOffset;
+        rayOrigin.localRotation = usingCameraAnchor ? Quaternion.identity : Quaternion.Euler(wristRayLocalEulerAngles);
+    }
+
+    Transform FindRightWristTransform()
+    {
+        if (rightSkeleton == null || rightSkeleton.Bones == null)
+            return null;
+
+        for (int i = 0; i < rightSkeleton.Bones.Count; i++)
         {
-            rayOrigin.SetParent(rightHand.transform, false);
+            OVRBone bone = rightSkeleton.Bones[i];
+            if (bone != null && bone.Id == OVRSkeleton.BoneId.Hand_WristRoot && bone.Transform != null)
+                return bone.Transform;
+        }
+
+        return null;
+    }
+
+    void ResolveRightWristIfAvailable()
+    {
+        if (rightHand == null)
+            return;
+
+        if (rightSkeleton == null)
+            ResolveRightHand();
+
+        Transform wrist = FindRightWristTransform();
+        if (wrist != null && rayOriginCreatedByScript && rayOrigin.parent != wrist)
+        {
+            rayOrigin.SetParent(wrist, false);
             rayOrigin.localPosition = wristRayLocalOffset;
             rayOrigin.localRotation = Quaternion.Euler(wristRayLocalEulerAngles);
         }
@@ -159,24 +234,41 @@ public sealed class VirtualHandsPinchInteractor : MonoBehaviour
         renderer.useWorldSpace = true;
         renderer.widthMultiplier = rayWidth;
         renderer.widthCurve = AnimationCurve.Linear(0f, 1f, 1f, 1f);
+        renderer.alignment = LineAlignment.View;
+        renderer.numCapVertices = 4;
+        renderer.shadowCastingMode = ShadowCastingMode.Off;
+        renderer.receiveShadows = false;
+        renderer.allowOcclusionWhenDynamic = false;
+        renderer.sortingOrder = 1000;
 
         // A runtime-created LineRenderer has no guaranteed URP material. In
         // URP that can render magenta when the fallback shader is missing, so
         // explicitly use a shader that is available in the project.
         Shader shader = Shader.Find("Universal Render Pipeline/Unlit") ??
                         Shader.Find("Sprites/Default") ??
-                        Shader.Find("Unlit/Color");
+                        Shader.Find("Unlit/Color") ??
+                        Shader.Find("UI/Default") ??
+                        Shader.Find("Hidden/Internal-Colored");
         if (shader == null)
-            return;
-
-        rayMaterial = new Material(shader)
         {
-            name = "Virtual Hands Ray Cyan Material"
-        };
-        if (rayMaterial.HasProperty("_BaseColor"))
-            rayMaterial.SetColor("_BaseColor", Color.white);
-        if (rayMaterial.HasProperty("_Color"))
-            rayMaterial.SetColor("_Color", Color.white);
+            Debug.LogError("Virtual hands ray could not find a compatible line shader.", this);
+            return;
+        }
+
+        if (rayMaterial == null)
+        {
+            rayMaterial = new Material(shader)
+            {
+                name = "Virtual Hands Ray Cyan Material"
+            };
+            if (rayMaterial.HasProperty("_BaseColor"))
+                rayMaterial.SetColor("_BaseColor", Color.white);
+            if (rayMaterial.HasProperty("_Color"))
+                rayMaterial.SetColor("_Color", Color.white);
+            if (rayMaterial.HasProperty("_ZTest"))
+                rayMaterial.SetFloat("_ZTest", 8f); // Always; keep the hand ray visible over the terrain.
+            rayMaterial.renderQueue = 3000;
+        }
         renderer.sharedMaterial = rayMaterial;
     }
 
@@ -210,6 +302,13 @@ public sealed class VirtualHandsPinchInteractor : MonoBehaviour
             renderer.startColor = rayColor;
             renderer.endColor = rayEndColor;
         }
+
+        if (visibleRayRenderer != null)
+        {
+            visibleRayRenderer.colorGradient = gradient;
+            visibleRayRenderer.startColor = rayColor;
+            visibleRayRenderer.endColor = rayEndColor;
+        }
     }
 
     void OnEnable()
@@ -219,11 +318,16 @@ public sealed class VirtualHandsPinchInteractor : MonoBehaviour
             rayInteractor.enabled = true;
         if (lineVisual != null)
             lineVisual.enabled = true;
+        if (visibleRayRenderer != null)
+            visibleRayRenderer.enabled = true;
+        Debug.Log("Virtual hands ray enabled.", this);
     }
 
     void Update()
     {
         ResolveRightHand();
+        EnsureRayOrigin();
+        ResolveRightWristIfAvailable();
 
         bool pinching = rightHand != null && rightHand.isActiveAndEnabled &&
             rightHand.IsTracked && rightHand.IsDataHighConfidence &&
@@ -259,10 +363,31 @@ public sealed class VirtualHandsPinchInteractor : MonoBehaviour
 
     void LateUpdate()
     {
+        UpdateVisibleRay();
+
         // PlayMaker can restore the authored tutorial wording whenever a
         // panel enters a state. Reapply the virtual-hands wording after that
         // state transition, just like the Gamepad condition does.
         GamepadUIInput.RefreshTutorialInstructions();
+    }
+
+    void UpdateVisibleRay()
+    {
+        if (visibleRayRenderer == null)
+            return;
+
+        Transform origin = rayOrigin != null ? rayOrigin : transform;
+        bool visible = isActiveAndEnabled && origin != null;
+        visibleRayRenderer.enabled = visible;
+        if (!visible)
+            return;
+
+        Vector3 start = origin.position;
+        Vector3 end = start + origin.forward * rayLength;
+        visibleRayRenderer.positionCount = 2;
+        visibleRayRenderer.SetPosition(0, start);
+        visibleRayRenderer.SetPosition(1, end);
+        visibleRayRenderer.widthMultiplier = rayWidth;
     }
 
     public bool TryGetCurrent3DRaycastHit(out RaycastHit hit)
@@ -284,6 +409,8 @@ public sealed class VirtualHandsPinchInteractor : MonoBehaviour
             rayInteractor.enabled = false;
         if (lineVisual != null)
             lineVisual.enabled = false;
+        if (visibleRayRenderer != null)
+            visibleRayRenderer.enabled = false;
         if (Active == this)
             Active = null;
     }

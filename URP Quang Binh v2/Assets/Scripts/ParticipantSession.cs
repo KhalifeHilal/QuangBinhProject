@@ -44,6 +44,11 @@ public static class ParticipantSession
         IsCheckedIn = true;
         Debug.Log($"Participant check-in: {Number:00}, set {QuestionSet}, question index {QuestionIndex}, interaction {InteractionMode}");
 
+        // Switch the active rig immediately.  VirtualHandsRigSwitcher also
+        // checks this in Update, but the direct call prevents a frame where
+        // the controller rig remains active after a virtual-hands check-in.
+        VirtualHandsRigSwitcher.RefreshForParticipant();
+
         // Apply Gamepad-specific tutorial instructions immediately after the
         // condition is selected. This runs before the tutorial panels are
         // restored, so inactive TextMeshPro labels are included as well.

@@ -6,162 +6,173 @@ using UnityEngine.SceneManagement;
 using UnityEngine.XR.Interaction.Toolkit.Interactors;
 
 /// <summary>
-/// Loads the tested Meta hand-tracking rig after participant check-in.
+/// Preloads the tested hand-tracking rig alongside the controller rig.
 ///
-/// The check-in UI still runs on the normal controller rig.  Once the
-/// participant is assigned to the Virtual_Hands condition, the controller
-/// rig is disabled and the PlayerRoot from Virtual_Hand_Rig is moved into the
-/// current scene.  This keeps the rig independent of the tutorial/scenario
-/// scene and prevents duplicate cameras and interactors.
+/// The check-in UI always starts on the normal controller rig. VR_Hand_Rig is
+/// authored directly in Tutorial_Scene and starts inactive; after check-in
+/// only the selected rig is enabled. This avoids a PlayMaker-driven scene
+/// transition or a second rig appearing mid-frame.
 /// </summary>
 [DefaultExecutionOrder(-300)]
 public sealed class VirtualHandsRigSwitcher : MonoBehaviour
 {
-    const string VirtualRigSceneName = "Virtual_Hand_Rig";
-
     static VirtualHandsRigSwitcher instance;
 
     readonly List<GameObject> disabledLegacyRoots = new List<GameObject>();
     GameObject virtualPlayerRoot;
     bool virtualModeActive;
-    bool loading;
+    bool virtualRigReady;
+    bool preloadStarted;
     bool restored;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void Bootstrap()
     {
-        if (instance != null)
-            return;
-
-        GameObject root = new GameObject("Virtual Hands Runtime");
-        instance = root.AddComponent<VirtualHandsRigSwitcher>();
-        DontDestroyOnLoad(root);
+        VirtualHandsRigSwitcher switcher = EnsureInstance();
+        switcher.BeginPreload();
     }
 
     void Update()
     {
+        EvaluateMode();
+    }
+
+    /// <summary>
+    /// Called directly by the check-in UI.  The old implementation waited
+    /// for the next Update tick, which could leave the controller rig active
+    /// while the hand rig was still not created.  Creating/evaluating the
+    /// switcher here makes the mode change deterministic on check-in.
+    /// </summary>
+    public static void RefreshForParticipant()
+    {
+        VirtualHandsRigSwitcher switcher = EnsureInstance();
+        if (switcher != null)
+            switcher.EvaluateMode();
+    }
+
+    static VirtualHandsRigSwitcher EnsureInstance()
+    {
+        if (instance != null)
+            return instance;
+
+        GameObject existing = GameObject.Find("Virtual Hands Runtime");
+        GameObject root = existing != null ? existing : new GameObject("Virtual Hands Runtime");
+        instance = root.GetComponent<VirtualHandsRigSwitcher>();
+        if (instance == null)
+            instance = root.AddComponent<VirtualHandsRigSwitcher>();
+        DontDestroyOnLoad(root);
+        return instance;
+    }
+
+    void EvaluateMode()
+    {
         bool shouldUseVirtualHands = ParticipantSession.IsCheckedIn &&
             ParticipantSession.InteractionMode == ParticipantInteractionMode.Virtual_Hands;
 
-        if (shouldUseVirtualHands && !virtualModeActive && !loading)
-            StartCoroutine(EnableVirtualHands());
+        if (!preloadStarted)
+            BeginPreload();
+
+        if (shouldUseVirtualHands && virtualRigReady && !virtualModeActive)
+        {
+            ActivateVirtualHands();
+        }
         else if (!shouldUseVirtualHands && virtualModeActive)
-            DisableVirtualHands();
+            DeactivateVirtualHands();
+
+        // PlayMaker states can re-enable an authored XR rig when a tutorial
+        // state changes. Keep the selected rig authoritative without doing a
+        // scene search every frame.
+        if (virtualModeActive)
+        {
+            if (virtualPlayerRoot != null && !virtualPlayerRoot.activeSelf)
+                virtualPlayerRoot.SetActive(true);
+
+            for (int i = 0; i < disabledLegacyRoots.Count; i++)
+            {
+                GameObject legacyRoot = disabledLegacyRoots[i];
+                if (legacyRoot != null && legacyRoot.activeSelf)
+                    legacyRoot.SetActive(false);
+            }
+        }
+        else if (virtualRigReady && virtualPlayerRoot != null && virtualPlayerRoot.activeSelf)
+        {
+            virtualPlayerRoot.SetActive(false);
+        }
     }
 
-    IEnumerator EnableVirtualHands()
+    void BeginPreload()
     {
-        loading = true;
+        if (preloadStarted)
+            return;
+
+        preloadStarted = true;
+        StartCoroutine(PreloadVirtualHandsRig());
+    }
+
+    IEnumerator PreloadVirtualHandsRig()
+    {
         restored = false;
 
         Transform previousRig = FindLegacyRigTransform();
         Vector3 spawnPosition = previousRig != null ? previousRig.position : Vector3.zero;
         Quaternion spawnRotation = previousRig != null ? previousRig.rotation : Quaternion.identity;
 
-        // Allow the rig scene to be opened directly for isolated testing
-        // without loading a second copy of itself.
-        if (SceneManager.GetActiveScene().name == VirtualRigSceneName)
-        {
-            GameObject existingPlayer = GameObject.Find("PlayerRoot");
-            if (existingPlayer != null)
-            {
-                virtualPlayerRoot = existingPlayer;
-                DontDestroyOnLoad(virtualPlayerRoot);
-                if (virtualPlayerRoot.GetComponent<LeftPinchLocomotion>() == null)
-                    virtualPlayerRoot.AddComponent<LeftPinchLocomotion>();
-                if (virtualPlayerRoot.GetComponent<VirtualHandsPinchInteractor>() == null)
-                    virtualPlayerRoot.AddComponent<VirtualHandsPinchInteractor>();
-                virtualModeActive = true;
-                loading = false;
-                yield break;
-            }
-        }
-
-        if (!IsSceneAvailable(VirtualRigSceneName))
-        {
-            Debug.LogError($"Virtual hands scene '{VirtualRigSceneName}' is not in Build Settings.", this);
-            RestoreLegacyControllerRigs();
-            loading = false;
-            yield break;
-        }
-
-        AsyncOperation load = SceneManager.LoadSceneAsync(VirtualRigSceneName, LoadSceneMode.Additive);
-        if (load == null)
-        {
-            RestoreLegacyControllerRigs();
-            loading = false;
-            yield break;
-        }
-
-        yield return load;
-
-        Scene rigScene = SceneManager.GetSceneByName(VirtualRigSceneName);
-        GameObject[] roots = rigScene.IsValid() ? rigScene.GetRootGameObjects() : null;
-        if (roots == null)
-        {
-            RestoreLegacyControllerRigs();
-            loading = false;
-            yield break;
-        }
-
+        // VR_Hand_Rig is authored directly in Tutorial_Scene. We only find
+        // it here and keep it inactive; there is no additive scene load.
+        Scene activeScene = SceneManager.GetActiveScene();
         GameObject player = null;
-        foreach (GameObject root in roots)
+        GameObject[] roots = activeScene.GetRootGameObjects();
+        for (int i = 0; i < roots.Length; i++)
         {
-            if (root.name == "PlayerRoot")
+            if (roots[i] != null &&
+                (roots[i].name == "VR_Hand_Rig" || roots[i].name == "PlayerRoot"))
             {
-                player = root;
-                // Keep the currently active controller rig rendering while
-                // the hand rig is being prepared. This prevents a one-frame
-                // black/flickering view during participant check-in.
-                player.SetActive(false);
-                continue;
+                player = roots[i];
+                break;
             }
-
-            // The source scene contains a floor, light, volume and helper
-            // anchors. They are useful in the standalone hand demo, but must
-            // not create duplicate cameras or cover the flood map here.
-            root.SetActive(false);
         }
 
         if (player == null)
         {
-            Debug.LogError("Virtual_Hand_Rig has no PlayerRoot.", this);
-            yield return SceneManager.UnloadSceneAsync(rigScene);
+            Debug.LogError("Tutorial_Scene has no direct VR_Hand_Rig for the virtual-hands rig.", this);
             RestoreLegacyControllerRigs();
-            loading = false;
             yield break;
         }
 
+        // Keep the controller rig active while the hand rig is prepared. The
+        // virtual rig is switched on only after ParticipantSession.CheckIn.
+        player.SetActive(false);
         player.transform.SetPositionAndRotation(spawnPosition, spawnRotation);
-        SceneManager.MoveGameObjectToScene(player, SceneManager.GetActiveScene());
-        DontDestroyOnLoad(player);
         virtualPlayerRoot = player;
-
         if (player.GetComponent<LeftPinchLocomotion>() == null)
             player.AddComponent<LeftPinchLocomotion>();
         if (player.GetComponent<VirtualHandsPinchInteractor>() == null)
             player.AddComponent<VirtualHandsPinchInteractor>();
 
+        // Do not activate the virtual rig yet. It is already present in the
+        // Tutorial_Scene hierarchy and can be toggled without another scene
+        // load when the participant ID is confirmed.
+        virtualRigReady = true;
+        Debug.Log("Virtual hands rig preloaded: VR_Hand_Rig is ready and inactive.", this);
+    }
+
+    void ActivateVirtualHands()
+    {
+        if (!virtualRigReady || virtualPlayerRoot == null)
+            return;
+
         // The old rig is disabled only after the complete hand rig exists.
         // Both operations happen before the next rendered frame.
         DisableLegacyControllerRigs();
-
         virtualPlayerRoot.SetActive(true);
         virtualModeActive = true;
-        loading = false;
-
-        if (rigScene.IsValid() && rigScene.isLoaded)
-            yield return SceneManager.UnloadSceneAsync(rigScene);
+        Debug.Log("Virtual hands rig active: VR_Hand_Rig and right-hand ray are ready.", this);
     }
 
-    void DisableVirtualHands()
+    void DeactivateVirtualHands()
     {
         if (virtualPlayerRoot != null)
-        {
             virtualPlayerRoot.SetActive(false);
-            Destroy(virtualPlayerRoot);
-            virtualPlayerRoot = null;
-        }
 
         virtualModeActive = false;
         RestoreLegacyControllerRigs();
@@ -183,6 +194,7 @@ public sealed class VirtualHandsRigSwitcher : MonoBehaviour
     void DisableLegacyControllerRigs()
     {
         disabledLegacyRoots.Clear();
+        restored = false;
         XROrigin[] origins = FindObjectsByType<XROrigin>(FindObjectsInactive.Include, FindObjectsSortMode.None);
         foreach (XROrigin origin in origins)
         {
@@ -235,21 +247,11 @@ public sealed class VirtualHandsRigSwitcher : MonoBehaviour
         restored = true;
     }
 
-    static bool IsSceneAvailable(string sceneName)
-    {
-        for (int i = 0; i < SceneManager.sceneCountInBuildSettings; i++)
-        {
-            string path = SceneUtility.GetScenePathByBuildIndex(i);
-            if (path.EndsWith('/' + sceneName + ".unity") ||
-                path.EndsWith('\\' + sceneName + ".unity"))
-                return true;
-        }
-
-        return false;
-    }
-
     void OnDestroy()
     {
+        if (virtualPlayerRoot != null)
+            virtualPlayerRoot.SetActive(false);
+
         if (instance == this)
             instance = null;
 

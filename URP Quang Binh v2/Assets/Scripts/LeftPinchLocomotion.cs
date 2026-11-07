@@ -1,6 +1,3 @@
-using Oculus.Interaction;
-using Oculus.Interaction.HandGrab;
-using Oculus.Interaction.Input;
 using UnityEngine;
 
 /// <summary>Hold a left index pinch and displace the hand to fly forward/backward or up/down.</summary>
@@ -23,7 +20,6 @@ public sealed class LeftPinchLocomotion : MonoBehaviour
     [SerializeField, Min(0)] private float activationDelay = 0.15f;
 
     private CharacterController body;
-    private HandGrabInteractor[] grabInteractors;
     private Vector3 neutralPosition;
     private Vector3 forward;
     private float pinchStartTime;
@@ -59,7 +55,6 @@ public sealed class LeftPinchLocomotion : MonoBehaviour
             return;
         }
 
-        grabInteractors = cameraRig.GetComponentsInChildren<HandGrabInteractor>(true);
     }
 
     private void LateUpdate()
@@ -84,18 +79,6 @@ public sealed class LeftPinchLocomotion : MonoBehaviour
             pinchPending = false;
             releaseRequired = false;
             return;
-        }
-
-        // Object interaction takes priority. A new pinch is needed afterwards.
-        foreach (var grab in grabInteractors)
-        {
-            if (grab != null && grab.isActiveAndEnabled && grab.Hand != null &&
-                grab.Hand.Handedness == Handedness.Left &&
-                (grab.State == InteractorState.Select || (!moving && grab.State == InteractorState.Hover)))
-            {
-                StopUntilRelease();
-                return;
-            }
         }
 
         if (releaseRequired)
