@@ -20,6 +20,10 @@ public sealed class VirtualHandsRigSwitcher : MonoBehaviour
 
     readonly List<GameObject> disabledLegacyRoots = new List<GameObject>();
     GameObject virtualPlayerRoot;
+    Transform legacyFollowRoot;
+    Vector3 lastLegacyPosition;
+    Quaternion lastLegacyRotation;
+    bool hasLegacyFollowPose;
     bool virtualModeActive;
     bool virtualRigReady;
     bool preloadStarted;
@@ -35,6 +39,20 @@ public sealed class VirtualHandsRigSwitcher : MonoBehaviour
     void Update()
     {
         EvaluateMode();
+    }
+
+    void LateUpdate()
+    {
+        if (!virtualModeActive || virtualPlayerRoot == null)
+            return;
+
+        // PlayMaker's tutorial FSM moves the controller XR Origin when the
+        // participant pinches the Start button and enters Zone_02. The
+        // controller rig may be inactive in Virtual Hands mode, but its
+        // Transform is still changed by SetPosition. Mirror only an external
+        // change of that source pose; ordinary hand locomotion moves the
+        // virtual rig and leaves the source unchanged.
+        SynchronizeVirtualRigAfterTutorialTeleport();
     }
 
     /// <summary>
@@ -116,6 +134,7 @@ public sealed class VirtualHandsRigSwitcher : MonoBehaviour
         Transform previousRig = FindLegacyRigTransform();
         Vector3 spawnPosition = previousRig != null ? previousRig.position : Vector3.zero;
         Quaternion spawnRotation = previousRig != null ? previousRig.rotation : Quaternion.identity;
+        legacyFollowRoot = previousRig;
 
         // VR_Hand_Rig is authored directly in Tutorial_Scene. We only find
         // it here and keep it inactive; there is no additive scene load.
@@ -153,6 +172,7 @@ public sealed class VirtualHandsRigSwitcher : MonoBehaviour
         // Tutorial_Scene hierarchy and can be toggled without another scene
         // load when the participant ID is confirmed.
         virtualRigReady = true;
+        CaptureLegacyFollowPose();
         Debug.Log("Virtual hands rig preloaded: VR_Hand_Rig is ready and inactive.", this);
     }
 
@@ -166,6 +186,7 @@ public sealed class VirtualHandsRigSwitcher : MonoBehaviour
         DisableLegacyControllerRigs();
         virtualPlayerRoot.SetActive(true);
         virtualModeActive = true;
+        CaptureLegacyFollowPose();
         Debug.Log("Virtual hands rig active: VR_Hand_Rig and right-hand ray are ready.", this);
     }
 
@@ -175,7 +196,52 @@ public sealed class VirtualHandsRigSwitcher : MonoBehaviour
             virtualPlayerRoot.SetActive(false);
 
         virtualModeActive = false;
+        hasLegacyFollowPose = false;
         RestoreLegacyControllerRigs();
+    }
+
+    void CaptureLegacyFollowPose()
+    {
+        if (legacyFollowRoot == null)
+            legacyFollowRoot = FindLegacyRigTransform();
+
+        if (legacyFollowRoot == null)
+        {
+            hasLegacyFollowPose = false;
+            return;
+        }
+
+        lastLegacyPosition = legacyFollowRoot.position;
+        lastLegacyRotation = legacyFollowRoot.rotation;
+        hasLegacyFollowPose = true;
+    }
+
+    void SynchronizeVirtualRigAfterTutorialTeleport()
+    {
+        if (legacyFollowRoot == null)
+            legacyFollowRoot = FindLegacyRigTransform();
+
+        if (legacyFollowRoot == null)
+            return;
+
+        Vector3 sourcePosition = legacyFollowRoot.position;
+        Quaternion sourceRotation = legacyFollowRoot.rotation;
+
+        if (!hasLegacyFollowPose)
+        {
+            lastLegacyPosition = sourcePosition;
+            lastLegacyRotation = sourceRotation;
+            hasLegacyFollowPose = true;
+            return;
+        }
+
+        bool positionChanged = (sourcePosition - lastLegacyPosition).sqrMagnitude > 0.000001f;
+        bool rotationChanged = Quaternion.Angle(sourceRotation, lastLegacyRotation) > 0.05f;
+        if (positionChanged || rotationChanged)
+            virtualPlayerRoot.transform.SetPositionAndRotation(sourcePosition, sourceRotation);
+
+        lastLegacyPosition = sourcePosition;
+        lastLegacyRotation = sourceRotation;
     }
 
     Transform FindLegacyRigTransform()
