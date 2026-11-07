@@ -29,8 +29,8 @@ public sealed class VirtualHandsPinchInteractor : MonoBehaviour
     [SerializeField] Color rayEndColor = new Color(1f, 1f, 1f, 0f);
 
     [Header("Wrist ray origin")]
-    [Tooltip("Local offset from the tracked right wrist. Z points toward the fingers; Y lowers the ray toward the arm.")]
-    [SerializeField] Vector3 wristRayLocalOffset = new Vector3(0f, -0.035f, 0.06f);
+    [Tooltip("Local offset from the tracked right wrist. Z moves into the palm toward the space between thumb and index finger; Y lowers the ray slightly toward the arm.")]
+    [SerializeField] Vector3 wristRayLocalOffset = new Vector3(-0.025f, -0.055f, 0.095f);
     [SerializeField] Vector3 wristRayLocalEulerAngles;
 
     XRRayInteractor rayInteractor;

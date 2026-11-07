@@ -336931,7 +336931,7 @@ MonoBehaviour:
   rayWidth: 0.005
   rayColor: {r: 0, g: 1, b: 1, a: 1}
   rayEndColor: {r: 1, g: 1, b: 1, a: 0}
-  wristRayLocalOffset: {x: 0, y: -0.035, z: 0.06}
+  wristRayLocalOffset: {x: -0.025, y: -0.055, z: 0.095}
   wristRayLocalEulerAngles: {x: 0, y: 0, z: 0}
 --- !u!114 &700000005
 MonoBehaviour:
