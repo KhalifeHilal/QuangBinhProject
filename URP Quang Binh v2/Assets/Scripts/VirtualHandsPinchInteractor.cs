@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Oculus.Interaction.Input;
+using TMPro;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.Rendering;
@@ -15,7 +16,10 @@ using UnityEngine.XR.Interaction.Toolkit.Interactors.Visuals;
 /// canvases and buttons continue to use the same UI event system as the
 /// controller condition. Pinch state is fed into XRI's manual input reader.
 /// </summary>
-[DefaultExecutionOrder(-100)]
+// XRInteractionManager runs at -105. Update before it so the manual pinch
+// reader is already current when XR UI processes the ray; this removes the
+// otherwise visible one-frame button delay.
+[DefaultExecutionOrder(-110)]
 public sealed class VirtualHandsPinchInteractor : MonoBehaviour
 {
     [Header("Rig (resolved automatically when empty)")]
@@ -53,6 +57,8 @@ public sealed class VirtualHandsPinchInteractor : MonoBehaviour
     float lastTrackedPinchTime = -Mathf.Infinity;
     bool warnedMissingHand;
     Slider activeSlider;
+    Button startButtonAudioTarget;
+    float nextStartButtonAudioSearch;
     Graphic[] cachedUiGraphics;
     float nextUiGraphicsRefresh;
 
@@ -149,6 +155,11 @@ public sealed class VirtualHandsPinchInteractor : MonoBehaviour
         // so 3D colliders cannot shorten the visible hand ray.
         lineVisual.enabled = false;
         visibleRayRenderer.enabled = true;
+
+        // The PlayMaker tutorial start button is initially inactive together
+        // with its parent. Hook it now, including inactive objects, so the
+        // first pinch cannot arrive before the click sound is registered.
+        EnsureStartButtonAudio();
 
         Debug.Log($"Virtual hands ray ready. Origin: {(rayOrigin != null ? rayOrigin.name : "fallback")}, length: {rayLength:0.##} m", this);
     }
@@ -413,7 +424,18 @@ public sealed class VirtualHandsPinchInteractor : MonoBehaviour
         previousPinching = pinching;
 
         if (pinchReader != null)
-            pinchReader.QueueManualState(pinching, pinching ? 1f : 0f);
+        {
+            // QueueManualState intentionally applies on the next frame. That
+            // is useful for authored input actions but makes a hand pinch feel
+            // delayed on UI buttons. Set the manual reader directly and mark
+            // the current frame so XR UI receives the press immediately.
+            pinchReader.manualPerformed = pinching;
+            pinchReader.manualValue = pinching ? 1f : 0f;
+            if (PinchStartedThisFrame)
+                pinchReader.manualFramePerformed = Time.frameCount;
+            if (PinchReleasedThisFrame)
+                pinchReader.manualFrameCompleted = Time.frameCount;
+        }
 
         if (rayInteractor != null)
         {
@@ -436,6 +458,7 @@ public sealed class VirtualHandsPinchInteractor : MonoBehaviour
 
     void LateUpdate()
     {
+        EnsureStartButtonAudio();
         UpdateVirtualSliderDrag();
         UpdateVisibleRay();
 
@@ -443,6 +466,34 @@ public sealed class VirtualHandsPinchInteractor : MonoBehaviour
         // panel enters a state. Reapply the virtual-hands wording after that
         // state transition, just like the Gamepad condition does.
         GamepadUIInput.RefreshTutorialInstructions();
+    }
+
+    void EnsureStartButtonAudio()
+    {
+        if (startButtonAudioTarget != null)
+            return;
+        if (Time.unscaledTime < nextStartButtonAudioSearch)
+            return;
+
+        nextStartButtonAudioSearch = Time.unscaledTime + 0.25f;
+        Button[] buttons = FindObjectsByType<Button>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        for (int i = 0; i < buttons.Length; i++)
+        {
+            Button candidate = buttons[i];
+            if (candidate == null)
+                continue;
+
+            string objectName = candidate.gameObject.name;
+            TMP_Text label = candidate.GetComponentInChildren<TMP_Text>(true);
+            bool isTutorialStart = objectName.IndexOf("StartGameButton", System.StringComparison.OrdinalIgnoreCase) >= 0 ||
+                string.Equals(label != null ? label.text.Trim() : string.Empty, "Start", System.StringComparison.OrdinalIgnoreCase);
+            if (!isTutorialStart)
+                continue;
+
+            candidate.onClick.AddListener(FloodAudio.PlayClick);
+            startButtonAudioTarget = candidate;
+            return;
+        }
     }
 
     void UpdateVirtualSliderDrag()

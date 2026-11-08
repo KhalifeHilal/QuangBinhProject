@@ -3090,8 +3090,8 @@ MonoBehaviour:
   leftHand: {fileID: 0}
   deadZone: 0.03
   fullSpeedDistance: 0.18
-  forwardSpeed: 1.2
-  verticalSpeed: 0.7
+  forwardSpeed: 5
+  verticalSpeed: 2
   activationDelay: 0.15
 --- !u!114 &700000004
 MonoBehaviour:

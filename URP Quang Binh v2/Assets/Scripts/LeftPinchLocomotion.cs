@@ -14,8 +14,10 @@ public sealed class LeftPinchLocomotion : MonoBehaviour
     [SerializeField, Min(0)] private float deadZone = 0.03f;
     [Tooltip("Hand displacement in metres that produces maximum speed.")]
     [SerializeField, Min(0.01f)] private float fullSpeedDistance = 0.18f;
-    [SerializeField, Min(0)] private float forwardSpeed = 1.2f;
-    [SerializeField, Min(0)] private float verticalSpeed = 0.7f;
+    // Match the Gamepad condition: 5 m/s forward/backward and 2 m/s
+    // vertically at full stick/hand displacement.
+    [SerializeField, Min(0)] private float forwardSpeed = 5f;
+    [SerializeField, Min(0)] private float verticalSpeed = 2f;
     [Tooltip("Time for the pinch to settle before its neutral position is captured.")]
     [SerializeField, Min(0)] private float activationDelay = 0.15f;
 

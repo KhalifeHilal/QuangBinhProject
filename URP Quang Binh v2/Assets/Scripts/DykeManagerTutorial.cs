@@ -122,8 +122,20 @@ public class DykeManagerTutorial : MonoBehaviour
 
         UpdatePlacementMarker();
         UpdateScenarioDykeHover();
-        ProcessFreePlacementGrip();
-        ProcessRightHandTrigger();
+        bool destroyedDyke = ProcessFreePlacementGrip();
+        if (destroyedDyke)
+        {
+            // A destroy pinch must never become the first point of a new
+            // dyke in the same frame.
+            inTriggerPress = false;
+            displayFutureDike = false;
+            if (futureDyke != null) { DestroyImmediate(futureDyke); futureDyke = null; }
+            HideFutureLengthLabel();
+        }
+        else
+        {
+            ProcessRightHandTrigger();
+        }
 
         if (displayFutureDike)
         {
@@ -373,12 +385,12 @@ public class DykeManagerTutorial : MonoBehaviour
         return found;
     }
 
-    void ProcessFreePlacementGrip()
+    bool ProcessFreePlacementGrip()
     {
         bool pressed = IsVirtualHandsMode
             ? VirtualHands != null && VirtualHands.PinchStartedThisFrame
             : scenarioGrip != null && scenarioGrip.WasPressedThisFrame();
-        if (!pressed) return;
+        if (!pressed) return false;
 
         // The authored tutorial dyke is not an A1P1ScenarioDyke and therefore
         // is not part of the free-placement list. Detect it directly under
@@ -387,17 +399,19 @@ public class DykeManagerTutorial : MonoBehaviour
         if (!freePlacement && IsVirtualHandsMode)
         {
             if (FindTutorialDykeUnderRay() != null)
-                TryDestroyTutorialDyke();
-            return;
+                return TryDestroyTutorialDyke();
+            return false;
         }
 
-        if (!freePlacement) return;
+        if (!freePlacement) return false;
 
         A1P1ScenarioDyke scenarioDyke = FindScenarioDykeUnderRay();
         if (scenarioDyke != null)
         {
-            TryDestroyFreePlacementDyke(scenarioDyke);
+            return TryDestroyFreePlacementDyke(scenarioDyke);
         }
+
+        return false;
     }
 
     GameObject FindTutorialDykeUnderRay()
@@ -428,10 +442,10 @@ public class DykeManagerTutorial : MonoBehaviour
         return closestDistance < float.MaxValue ? dykeToDestroy : null;
     }
 
-    void TryDestroyTutorialDyke()
+    bool TryDestroyTutorialDyke()
     {
         if (dykeToDestroy == null)
-            return;
+            return false;
 
         ScenarioDykeLength length = dykeToDestroy.GetComponent<ScenarioDykeLength>();
         FloodStudyLogger.RecordDykeDestroyed(length);
@@ -440,6 +454,7 @@ public class DykeManagerTutorial : MonoBehaviour
         GameObject target = dykeToDestroy;
         dykeToDestroy = null;
         Destroy(target);
+        return true;
     }
 
     void ProcessRightHandTrigger()
@@ -944,6 +959,12 @@ public class DykeManagerTutorial : MonoBehaviour
 
     void SelectInteraction(SelectEnterEventArgs ev)
     {
+        // Virtual Hands feed the same pinch into this manager directly. The
+        // XRI select callback would process that pinch a second time, which
+        // could destroy a dyke and immediately start a tiny replacement.
+        if (IsVirtualHandsMode)
+            return;
+
         XRSimpleInteractable interaction = ev.interactableObject as XRSimpleInteractable;
         if (interaction != null)
         {
@@ -952,6 +973,8 @@ public class DykeManagerTutorial : MonoBehaviour
             interaction.hoverExited.RemoveListener(HoverExitInteraction);
 
             ScenarioDykeLength length = interaction.gameObject.GetComponent<ScenarioDykeLength>();
+            if (interaction.gameObject == dykeToDestroy)
+                dykeToDestroy = null;
             Destroy(interaction.gameObject);
 
             dykeDestroyed++;
