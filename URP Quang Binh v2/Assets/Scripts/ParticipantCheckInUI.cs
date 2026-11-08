@@ -100,6 +100,7 @@ public sealed class ParticipantCheckInUI : MonoBehaviour
     void Confirm()
     {
         ParticipantSession.CheckIn(participantNumber, selectedSet);
+        HideControllerTutorialObjectsForVirtualHands();
         RestoreTutorialPanels();
         RestoreTutorialManager();
         Destroy(gameObject);
@@ -131,6 +132,33 @@ public sealed class ParticipantCheckInUI : MonoBehaviour
                 hiddenTutorialObjects.Add(target);
                 target.SetActive(false);
             }
+        }
+    }
+
+    void HideControllerTutorialObjectsForVirtualHands()
+    {
+        if (ParticipantSession.InteractionMode != ParticipantInteractionMode.Virtual_Hands)
+            return;
+
+        string[] panelNames =
+        {
+            "TutoPanel_Interface", "TutoPanel_Moving", "Zone_02"
+        };
+        foreach (string panelName in panelNames)
+        {
+            GameObject panel = FindSceneObject(panelName);
+            if (panel == null) continue;
+            // Zone_02 contains both dyke phases. Search its whole subtree so
+            // additional grouping objects do not prevent marked objects being found.
+            Transform background = panelName == "Zone_02"
+                ? panel.transform
+                : panel.transform.Find("Canvas/Background");
+            if (background == null) continue;
+
+            // Include inactive descendants while the panels are hidden for check-in.
+            foreach (Transform child in background.GetComponentsInChildren<Transform>(true))
+                if (child != background && child.name.StartsWith("!_", System.StringComparison.Ordinal))
+                    child.gameObject.SetActive(false);
         }
     }
 
