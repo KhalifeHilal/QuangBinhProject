@@ -158,8 +158,8 @@ public static class GamepadUIInput
                     label.text = "Point at the dyke and pinch with your right hand to destroy it.";
                     break;
                 case TutorialInstructionKind.BuildDyke:
-                    label.text = "Build a dyke with a right-hand pinch.\n" +
-                        "Pinch once for the start point and once for the end point.";
+                    label.text = "Pinch and hold with your right hand to build a dyke.\n" +
+                        "Release the pinch to finish building the dyke.";
                     break;
             }
             return;
