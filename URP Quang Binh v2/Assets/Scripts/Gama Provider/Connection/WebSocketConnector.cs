@@ -1,11 +1,12 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 using WebSocketSharp;
 
 
 public abstract class WebSocketConnector : MonoBehaviour
-{
-    [SerializeField] string DefaultIP = "192.168.68.50";
+{ /*192.168.68.50*/
+    [SerializeField] string DefaultIP = "localhost";
     protected string DefaultPort = "8080";
 
     protected string host;
@@ -14,6 +15,9 @@ public abstract class WebSocketConnector : MonoBehaviour
     protected bool UseMiddleware;
 
     private WebSocket socket;
+    readonly Queue<Action> pendingCallbacks = new Queue<Action>();
+    readonly object callbackLock = new object();
+    bool shuttingDown;
 
 
     protected int HeartbeatInMs = 5000; //only for middleware mode
@@ -69,13 +73,70 @@ public abstract class WebSocketConnector : MonoBehaviour
         // Doesn't work on our specific installation : https://github.com/sta/websocket-sharp/issues/580
         socket.Compression = CompressionMethod.None; //Deflate;
 
-        socket.OnOpen += HandleConnectionOpen;
-        socket.OnMessage += HandleReceivedMessage;
-        socket.OnClose += HandleConnectionClosed;
+        socket.OnOpen += QueueConnectionOpen;
+        socket.OnMessage += QueueReceivedMessage;
+        socket.OnClose += QueueConnectionClosed;
+    }
+
+    // WebSocketSharp invokes its callbacks on worker threads. Dispatch them
+    // here before handlers or subscribers access Unity objects/coroutines.
+    void Update()
+    {
+        int count;
+        lock (callbackLock)
+            count = pendingCallbacks.Count;
+
+        for (int i = 0; i < count; i++)
+        {
+            Action callback;
+            lock (callbackLock)
+            {
+                if (shuttingDown || pendingCallbacks.Count == 0)
+                    return;
+                callback = pendingCallbacks.Dequeue();
+            }
+
+            try { callback(); }
+            catch (Exception exception) { Debug.LogException(exception, this); }
+        }
+    }
+
+    void QueueCallback(Action callback)
+    {
+        lock (callbackLock)
+        {
+            if (!shuttingDown)
+                pendingCallbacks.Enqueue(callback);
+        }
+    }
+
+    void QueueConnectionOpen(object sender, EventArgs e)
+    {
+        QueueCallback(() => HandleConnectionOpen(sender, e));
+    }
+
+    void QueueReceivedMessage(object sender, MessageEventArgs e)
+    {
+        QueueCallback(() => HandleReceivedMessage(sender, e));
+    }
+
+    void QueueConnectionClosed(object sender, CloseEventArgs e)
+    {
+        QueueCallback(() => HandleConnectionClosed(sender, e));
     }
 
     void OnDestroy()
     {
+        lock (callbackLock)
+        {
+            shuttingDown = true;
+            pendingCallbacks.Clear();
+        }
+
+        if (socket == null) return;
+        socket.OnOpen -= QueueConnectionOpen;
+        socket.OnMessage -= QueueReceivedMessage;
+        socket.OnClose -= QueueConnectionClosed;
         socket.CloseAsync();
     }
 
@@ -91,7 +152,11 @@ public abstract class WebSocketConnector : MonoBehaviour
 
     protected void SendMessageToServer(string message, Action<bool> successCallback)
     {
-        socket.SendAsync(message, successCallback);
+        socket.SendAsync(message, success =>
+        {
+            if (successCallback != null)
+                QueueCallback(() => successCallback(success));
+        });
     }
 
     protected WebSocket GetSocket()

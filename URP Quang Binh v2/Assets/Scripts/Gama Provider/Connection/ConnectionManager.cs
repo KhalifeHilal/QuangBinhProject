@@ -38,7 +38,8 @@ public class ConnectionManager : WebSocketConnector
     // ############################################# UNITY FUNCTIONS #############################################
     void Awake()
     {
-        UseMiddleware = DesktopMode ? UseMiddlewareDM : PlayerPrefs.GetString("MIDDLEWARE").Equals("Y");
+       // UseMiddleware = DesktopMode ? UseMiddlewareDM : PlayerPrefs.GetString("MIDDLEWARE").Equals("Y");
+        UseMiddleware = true;
         Debug.Log("ConnectionManager: Awake : " + PlayerPrefs.GetString("MIDDLEWARE"));
         Debug.Log("ConnectionManager Awake host: " + PlayerPrefs.GetString("IP") + " PORT: " +
                   PlayerPrefs.GetString("PORT") + " UseMiddleware: " + UseMiddleware);
