@@ -27,7 +27,7 @@ public sealed class GamepadDykeBuilder : MonoBehaviour
     [Min(.02f)] [SerializeField] float hoverCheckInterval = .1f;
     [Min(.1f)] [SerializeField] float sceneSearchInterval = .5f;
 
-    readonly Color cursorColor = new Color(.1f, .8f, 1f, 1f);
+    readonly Color cursorColor = new Color(.05f, 1f, .25f, 1f);
     readonly Color hoverColor = new Color(1f, .72f, .08f, 1f);
     readonly Color invalidColor = new Color(1f, .04f, .04f, 1f);
 
@@ -189,7 +189,7 @@ public sealed class GamepadDykeBuilder : MonoBehaviour
         cursorMarker = GameObject.CreatePrimitive(PrimitiveType.Sphere);
         cursorMarker.name = "TerrainCursor";
         cursorMarker.transform.SetParent(visualRoot.transform, true);
-        cursorMarker.transform.localScale = Vector3.one * .18f;
+        cursorMarker.transform.localScale = Vector3.one * .12f;
         Collider cursorCollider = cursorMarker.GetComponent<Collider>();
         if (cursorCollider != null) cursorCollider.enabled = false;
 
