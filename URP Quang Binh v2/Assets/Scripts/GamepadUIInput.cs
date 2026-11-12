@@ -20,6 +20,24 @@ public static class GamepadUIInput
     static Canvas selectedCanvas;
     static float nextMoveTime;
     static float nextTutorialInstructionRefreshTime;
+    static int lastUISubmitFrame = -1;
+    static EventSystem navigationEventSystem;
+    static bool previousSendNavigationEvents;
+
+    // Phase shortcuts must not act on a question/survey, including the frame
+    // in which A closes that panel and creates the next scenario prompt.
+    public static bool BlocksPhaseShortcuts
+    {
+        get
+        {
+            if (lastUISubmitFrame == Time.frameCount) return true;
+            foreach (Selectable candidate in Selectable.allSelectablesArray)
+                if (IsUsable(candidate) && (candidate is Slider || IsQuestionControl(candidate) ||
+                    IsConfirmControl(candidate) || IsContinueButton(candidate)))
+                    return true;
+            return false;
+        }
+    }
 
     enum TutorialInstructionKind
     {
@@ -49,6 +67,7 @@ public static class GamepadUIInput
         if (eventSystem == null)
             return;
 
+        OwnNavigation(eventSystem);
         EnsureSelected(eventSystem);
         if (selected == null)
             return;
@@ -168,7 +187,8 @@ public static class GamepadUIInput
     /// </summary>
     public static void SubmitTutorialStart(EventSystem eventSystem)
     {
-        if (eventSystem == null)
+        if (eventSystem == null || !ParticipantInput.IsGamepadParticipant ||
+            BlocksPhaseShortcuts || ParticipantInput.GamepadConfirmWasPressedThisFrame())
             return;
 
         // B is reserved for an actual tutorial/start prompt. Never search
@@ -198,6 +218,7 @@ public static class GamepadUIInput
         if (startButton == null)
             return;
 
+        lastUISubmitFrame = Time.frameCount;
         selected = startButton;
         selectedCanvas = CanvasFor(selected);
         eventSystem.SetSelectedGameObject(selected.gameObject);
@@ -242,7 +263,7 @@ public static class GamepadUIInput
             {
                 Select(eventSystem, firstSlider);
             }
-            else if (selectedIsSlider && eventSystem.currentSelectedGameObject != selected.gameObject)
+            else if (eventSystem.currentSelectedGameObject != selected.gameObject)
             {
                 Select(eventSystem, selected);
             }
@@ -502,11 +523,25 @@ public static class GamepadUIInput
         if (selected == null || !IsUsable(selected))
             return;
 
+        if (lastUISubmitFrame == Time.frameCount)
+            return;
+        lastUISubmitFrame = Time.frameCount;
+
         // A confirms the current slider value and moves to the next control
         // below it, such as the confidence Confirm button.
         if (selected is Slider)
         {
-            MoveSelection(eventSystem, false, -1f);
+            // Survey/Confidence layouts may nest or rotate the slider and
+            // Confirm separately. Resolve the button in the same canvas
+            // instead of depending on their world-space positions.
+            foreach (Selectable candidate in Selectable.allSelectablesArray)
+            {
+                if (IsConfirmControl(candidate) && CanvasFor(candidate) == selectedCanvas)
+                {
+                    Select(eventSystem, candidate);
+                    return;
+                }
+            }
             return;
         }
 
@@ -525,16 +560,18 @@ public static class GamepadUIInput
         if (!(candidate is Button) || !IsUsable(candidate))
             return false;
 
-        Transform current = candidate.transform;
-        while (current != null)
-        {
-            if (current.name.IndexOf("start", System.StringComparison.OrdinalIgnoreCase) >= 0)
-                return true;
-            current = current.parent;
-        }
+        // Ancestor names such as Restart/StartPanel do not make an answer or
+        // Continue button a tutorial Start button. Simulation starts use Y.
+        if (candidate.name.Equals("StartGameButton", StringComparison.OrdinalIgnoreCase) ||
+            candidate.name.Equals("StartButton", StringComparison.OrdinalIgnoreCase) ||
+            candidate.name.Equals("Start", StringComparison.OrdinalIgnoreCase))
+            return true;
 
         TMP_Text label = candidate.GetComponentInChildren<TMP_Text>(true);
-        return label != null && label.text.IndexOf("start", System.StringComparison.OrdinalIgnoreCase) >= 0;
+        string text = label != null ? label.text.Trim() : string.Empty;
+        return text.Equals("Start", StringComparison.OrdinalIgnoreCase) ||
+            text.Equals("Start game", StringComparison.OrdinalIgnoreCase) ||
+            text.Equals("Start tutorial", StringComparison.OrdinalIgnoreCase);
     }
 
     static bool IsAnswerButton(Selectable candidate)
@@ -580,7 +617,8 @@ public static class GamepadUIInput
             return false;
 
         if (candidate.name.Equals("Continue", StringComparison.OrdinalIgnoreCase) ||
-            candidate.name.Equals("ContinueAfterFeedback", StringComparison.OrdinalIgnoreCase))
+            candidate.name.Equals("ContinueAfterFeedback", StringComparison.OrdinalIgnoreCase) ||
+            candidate.name.Equals("Finish", StringComparison.OrdinalIgnoreCase))
             return true;
 
         TMP_Text label = candidate.GetComponentInChildren<TMP_Text>(true);
@@ -612,8 +650,44 @@ public static class GamepadUIInput
         return candidate != null ? candidate.GetComponentInParent<Canvas>() : null;
     }
 
+    static void OwnNavigation(EventSystem eventSystem)
+    {
+        if (navigationEventSystem != eventSystem)
+        {
+            RestoreNavigation();
+            navigationEventSystem = eventSystem;
+            previousSendNavigationEvents = eventSystem.sendNavigationEvents;
+        }
+        // We handle the stick and A ourselves. Prevent the input module from
+        // also sending Submit/Cancel (B) or navigation to the same selection.
+        eventSystem.sendNavigationEvents = false;
+    }
+
+    static void RestoreNavigation()
+    {
+        if (navigationEventSystem != null)
+            navigationEventSystem.sendNavigationEvents = previousSendNavigationEvents;
+        navigationEventSystem = null;
+    }
+
+    public static void MaintainSelectionFocus()
+    {
+        if (!ParticipantInput.IsGamepadParticipant || EventSystem.current == null)
+            return;
+        OwnNavigation(EventSystem.current);
+        if (IsUsable(selected))
+        {
+            if (EventSystem.current.currentSelectedGameObject != selected.gameObject)
+                Select(EventSystem.current, selected);
+        }
+        else
+            EnsureSelected(EventSystem.current);
+    }
+
     public static void ResetSelection()
     {
+        RestoreNavigation();
+        lastUISubmitFrame = -1;
         selected = null;
         selectedCanvas = null;
         nextMoveTime = 0f;

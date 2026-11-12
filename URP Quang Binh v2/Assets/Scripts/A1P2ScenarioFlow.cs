@@ -41,7 +41,7 @@ public sealed class A1P2ScenarioFlow : MonoBehaviour
         floodPrefab = prefab; viewingDuration = previewSeconds; floodDuration = simulationSeconds;
         questA ??= new InputAction("A1-P2 Continue", InputActionType.Button, "<XRController>{RightHand}/primaryButton");
         questA.Enable();
-        prompt = P2Panel.CreateStartPrompt();
+        prompt = P2Panel.CreateStartPrompt(StartPreview);
         phase = Phase.WaitingForA;
     }
 
@@ -53,7 +53,9 @@ public sealed class A1P2ScenarioFlow : MonoBehaviour
 
     void Update()
     {
-        if (phase == Phase.WaitingForA && ParticipantInput.StartWasPressedThisFrame(questA)) StartPreview();
+        // Gamepad A starts through the focused UI button, as in A1-P1.
+        if (phase == Phase.WaitingForA && !ParticipantInput.IsGamepadParticipant &&
+            ParticipantInput.ContinueWasPressedThisFrame(questA)) StartPreview();
         if (phase == Phase.BuildingDykes && ParticipantInput.SimulationStartWasPressedThisFrame(questA)) StartFlood();
         if (phase != Phase.Preview && phase != Phase.Flood) return;
         elapsed += Time.deltaTime;
@@ -248,12 +250,12 @@ static class P2Panel
     static string[] CurrentAnswers => UseB ? AnswersB : AnswersA;
     static int CorrectAnswerIndex => UseB ? 1 : 3;
 
-    public static GameObject CreateStartPrompt()
+    public static GameObject CreateStartPrompt(Action onStart)
     {
         GameObject root = CanvasRoot("A1_P2_Start", new Vector2(950, 350));
         FloodLearningUI.Text("Title", root.transform, "A1 - P2", 40, FontStyles.Bold, -35, 55, TextAlignmentOptions.Center, 40);
         FloodLearningUI.Text("Topic", root.transform, "Topography", 45, FontStyles.Bold, -110, 65, TextAlignmentOptions.Center, 40);
-        FloodLearningUI.Text("Continue", root.transform, ParticipantInput.IsGamepadParticipant ? "Press B to continue" : "Press A to continue", 35, FontStyles.Normal, -220, 55, TextAlignmentOptions.Center, 40).color = new Color(.3f, .8f, 1f);
+        FloodScenarioContinuePrompt.AddStartControl(root.transform, onStart, -220);
         FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.1f); return root;
     }
     public static GameObject CreatePreviewHint()

@@ -67,7 +67,8 @@ public static class ParticipantInput
     {
         if (!IsGamepadParticipant) return false;
         EnsureEnabled();
-        return start.WasPressedThisFrame();
+        return start.WasPressedThisFrame() && !confirm.WasPressedThisFrame() &&
+            !GamepadUIInput.BlocksPhaseShortcuts;
     }
 
     /// <summary>
@@ -78,8 +79,7 @@ public static class ParticipantInput
     {
         if (IsGamepadParticipant)
         {
-            EnsureEnabled();
-            return start.WasPressedThisFrame();
+            return GamepadStartWasPressedThisFrame();
         }
 
         return questAction != null && questAction.WasPressedThisFrame();
@@ -116,7 +116,8 @@ public static class ParticipantInput
         if (IsGamepadParticipant)
         {
             EnsureEnabled();
-            return simulationStart.WasPressedThisFrame();
+            return simulationStart.WasPressedThisFrame() && !confirm.WasPressedThisFrame() &&
+                !GamepadUIInput.BlocksPhaseShortcuts;
         }
 
         return questAction != null && questAction.WasPressedThisFrame();

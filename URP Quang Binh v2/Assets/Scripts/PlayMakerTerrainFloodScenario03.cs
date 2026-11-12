@@ -66,7 +66,7 @@ public sealed class PlayMakerTerrainFloodScenario03 : MonoBehaviour
         Hide("StartGame"); Hide("TutorialAnimation_01"); Hide("TutorialAnimation_02");
         ClearDykeManagerChildren();
         if (continuePrompt != null) Destroy(continuePrompt);
-        continuePrompt = FloodScenarioContinuePrompt.Show();
+        continuePrompt = FloodScenarioContinuePrompt.Show(StartPathwayPreview);
         phase = Phase.WaitingForA;
     }
 
@@ -80,11 +80,14 @@ public sealed class PlayMakerTerrainFloodScenario03 : MonoBehaviour
             EnsureScenarioLogStarted();
             Hide("StartGame"); Hide("TutorialAnimation_01"); Hide("TutorialAnimation_02");
             ClearDykeManagerChildren();
-            continuePrompt = FloodScenarioContinuePrompt.Show();
+            continuePrompt = FloodScenarioContinuePrompt.Show(StartPathwayPreview);
             phase = Phase.WaitingForA;
-            Debug.Log($"A1-P1 ready. Press the right Quest {(ParticipantInput.IsGamepadParticipant ? "B" : "A")} button to continue.");
+            Debug.Log("A1-P1 ready. Press the right Quest A button to start.");
         }
-        if (phase == Phase.WaitingForA && ParticipantInput.StartWasPressedThisFrame(questA)) StartPathwayPreview();
+        // Gamepad A submits the focused start button through GamepadUIInput.
+        // Do not also poll A here: one press must never activate two phases.
+        if (phase == Phase.WaitingForA && !ParticipantInput.IsGamepadParticipant &&
+            ParticipantInput.ContinueWasPressedThisFrame(questA)) StartPathwayPreview();
         if (phase == Phase.WaitingForSimulationA && ParticipantInput.SimulationStartWasPressedThisFrame(questA)) StartSimulation();
         if (phase != Phase.Preview && phase != Phase.Running) return;
         elapsed += Time.deltaTime;

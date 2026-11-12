@@ -51,7 +51,7 @@ public sealed class A1P5ScenarioFlow : MonoBehaviour
         questA ??= new InputAction("A1-P5 Continue", InputActionType.Button,
             "<XRController>{RightHand}/primaryButton");
         questA.Enable();
-        prompt = A1P5Panel.CreateStartPrompt();
+        prompt = A1P5Panel.CreateStartPrompt(StartPreview);
         phase = Phase.WaitingForA;
     }
 
@@ -63,7 +63,9 @@ public sealed class A1P5ScenarioFlow : MonoBehaviour
 
     void Update()
     {
-        if (phase == Phase.WaitingForA && ParticipantInput.StartWasPressedThisFrame(questA)) StartPreview();
+        // Gamepad A starts through the focused UI button, as in A1-P1.
+        if (phase == Phase.WaitingForA && !ParticipantInput.IsGamepadParticipant &&
+            ParticipantInput.ContinueWasPressedThisFrame(questA)) StartPreview();
         if (phase == Phase.BuildingDykes && ParticipantInput.SimulationStartWasPressedThisFrame(questA)) StartFlood();
         if (phase != Phase.Preview && phase != Phase.Flood) return;
         elapsed += Time.deltaTime;
@@ -333,12 +335,12 @@ static class A1P5Panel
     static string[] CurrentAnswers => UseB ? AnswersB : AnswersA;
     static int CorrectAnswerIndex => UseB ? 2 : 1;
 
-    public static GameObject CreateStartPrompt()
+    public static GameObject CreateStartPrompt(Action onStart)
     {
         GameObject root = P2Panel.CanvasRoot("A1_P5_Start", new Vector2(1100, 350));
         FloodLearningUI.Text("Title", root.transform, "A1 - P5", 40, FontStyles.Bold, -35, 55, TextAlignmentOptions.Center, 40);
         FloodLearningUI.Text("Topic", root.transform, "Resource-Efficient Placement", 42, FontStyles.Bold, -110, 65, TextAlignmentOptions.Center, 40);
-        FloodLearningUI.Text("Continue", root.transform, ParticipantInput.IsGamepadParticipant ? "Press B to continue" : "Press A to continue", 35, FontStyles.Normal, -220, 55, TextAlignmentOptions.Center, 40).color = new Color(.3f, .8f, 1f);
+        FloodScenarioContinuePrompt.AddStartControl(root.transform, onStart, -220);
         FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.1f);
         return root;
     }
@@ -448,7 +450,7 @@ static class A1P5Panel
         FloodLearningUI.Text("Explanation", root.transform,
             explanation,
             30, FontStyles.Normal, -435, 230, TextAlignmentOptions.TopLeft, 70);
-        FloodLearningUI.Button("Finish", root.transform, "Finish", -735, 82, 29,
+        FloodLearningUI.Button("Continue", root.transform, "Continue", -735, 82, 29,
             () => { UnityEngine.Object.Destroy(root); onCompleted?.Invoke(); }, 360);
         Debug.Log($"{prefix}-P5 result: answer={(char)('A' + answer)}, correct={answer == CorrectAnswerIndex}, confidence={confidence}");
     }

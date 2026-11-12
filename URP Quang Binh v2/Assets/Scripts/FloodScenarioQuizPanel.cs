@@ -301,15 +301,26 @@ static class FloodLearningUI
 
 sealed class FloodScenarioContinuePrompt : MonoBehaviour
 {
-    public static GameObject Show()
+    public static GameObject Show(System.Action onStart)
     {
         GameObject root = new GameObject("A1_P1_ContinuePrompt", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler)); root.GetComponent<Canvas>().renderMode = RenderMode.WorldSpace;
         RectTransform r = (RectTransform)root.transform; r.sizeDelta = new Vector2(900, 330); r.localScale = Vector3.one * .0015f; FloodLearningUIStyle.ApplyPanel(root.AddComponent<Image>());
         FloodLearningUI.Text("Title", root.transform, "A1 - P1", 39, FontStyles.Bold, -35, 55, TextAlignmentOptions.Center, 45);
         FloodLearningUI.Text("Scenario", root.transform, "Flood Pathway Identification", 43, FontStyles.Bold, -105, 65, TextAlignmentOptions.Center, 45);
-        string continueText = ParticipantInput.IsGamepadParticipant ? "Press B to continue" : "Press A to continue";
-        TMP_Text prompt = FloodLearningUI.Text("Prompt", root.transform, continueText, 35, FontStyles.Normal, -210, 55, TextAlignmentOptions.Center, 45); prompt.color = new Color(.35f, .82f, 1);
+        AddStartControl(root.transform, onStart, -210);
         FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.1f); return root;
+    }
+
+    public static void AddStartControl(Transform parent, Action onStart, float top)
+    {
+        if (ParticipantInput.IsGamepadParticipant)
+            FloodLearningUI.Button("Continue", parent, "Press A to start", top, 70, 35,
+                () => onStart?.Invoke(), 650);
+        else
+        {
+            TMP_Text prompt = FloodLearningUI.Text("Prompt", parent, "Press A to start", 35, FontStyles.Normal, top, 55, TextAlignmentOptions.Center, 45);
+            prompt.color = new Color(.35f, .82f, 1);
+        }
     }
 
     public static GameObject ShowSimulationStart()
