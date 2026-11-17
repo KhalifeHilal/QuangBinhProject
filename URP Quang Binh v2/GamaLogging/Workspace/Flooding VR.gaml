@@ -1,0 +1,918 @@
+model Flood_VR
+
+import "Flooding Model.gaml"
+
+global { 
+	map<string, float> player_resources;
+	map<string, list<string>> player_built_dykes;
+	map<string, string> dykes_built_by_players;
+	
+	bool use_tell <- false;
+	bool ready_to_build_dyke <- false;
+	 
+	bool diking_over <- false;
+	
+	list<int> color_ID <- [0, 1, 2, 3];
+	map<string, int> player_assigned_colors;
+	/*************************************************************
+	 * Redefinition of initial parameters for people, water and obstacles
+	 *************************************************************/
+
+
+ 
+	/************************************************************* 
+	 * "Winning" condition: determines whether the player 
+	 * has "won" or "lost" depending on the number of lives he/she
+	 * saved with the dykes
+	 *************************************************************/
+	
+	
+	reflex change_building_colors {
+		ask buildings {
+			int nb <- cells_under count (each.water_height > 0);
+			switch (nb) {
+				match 0 {color <- #gray;}
+				match_one [1,2] {color <- rgb(214, 168, 0);}
+				match_one [3,4] {color <- rgb(237, 155, 0);}
+				default {color <- rgb(176, 32, 19);}
+			}
+		}
+	}
+	
+
+	/*************************************************************
+	 * Statuses of the player, once connected to the middleware (and to GAMA)
+	 *************************************************************/
+	 
+	 // The player chooses a language and is doing the tutorial
+	 string IN_TUTORIAL <- "IN_TUTORIAL";
+	 
+	 
+	 string START_PRESSED <- "START_PRESSED";
+
+	string IN_FLOOD <- "IN_FLOOD";
+	
+	string IN_DYKE_BUILDING <- "IN_DYKE_BUILDING";
+
+	/*************************************************************
+	 * Functions that control the transitions between the states
+	 *************************************************************/
+	 
+	bool river_already_sent_in_diking_phase;
+	
+  
+	action enter_init {
+		write "enter_init";
+		do enter_init_base;
+		ask unity_player {do set_status(IN_TUTORIAL);}
+		flooding_requested_from_gama <- false;
+		diking_requested_from_gama <- false;
+		restart_requested_from_gama <- false;	
+		button_frame <- nil;
+		button_image_unselected <- nil;
+		button_image_selected <- nil;
+	}
+	
+	action enter_start {
+		//write "enter_start";
+		ask unity_player {
+			start_pressed <- false;
+			do set_status(IN_TUTORIAL);
+		}	
+	}
+	
+	 action end_game_action {
+	 	//ask unity_linker {do sendEndGame;}
+	 }
+	
+	action exit_flooding {
+		// Capture BEFORE exit_flooding_base increments/reset the round.
+		ask unity_linker { do send_main_scene_snapshot("simulation_end"); }
+		do exit_flooding_base;
+		ask unity_linker {do send_message players: unity_player as list mes: ["score":: round(world.score)];}
+	}
+	
+	action exit_init {
+		//write "exit_init";
+		ask unity_linker {
+			do send_message players: unity_player as list mes: ["end_init"::""];
+		}
+	}
+	
+	
+	action exit_diking {
+//		write "exit_diking";
+		ask unity_linker {
+			do send_main_scene_snapshot("build_end");
+			do send_message players: unity_player as list mes: ["end_diking"::""];
+		}
+		current_timeout <- gama.machine_time + diking_duration * 1000;
+		ready_to_build_dyke <- false;
+		
+	}
+	
+	action body_init  {
+		
+	}
+	
+	action body_flooding {
+		
+		do enter_flooding_base;
+
+	} 
+	
+	action body_diking {
+		if (!(unity_player all_match each.in_dyke_building) and !ready_to_build_dyke) {
+			current_timeout <- gama.machine_time + diking_duration * 1000;
+		}
+		else{
+			ready_to_build_dyke <- true;
+		}
+		
+	}
+	
+	action enter_diking {
+		//write "enter_diking";
+		diking_over <- false;
+		
+		//write "enter_diking";
+		ask unity_linker {
+			do send_static_geometries();
+			do send_message players: unity_player as list mes: ["round":: current_round];
+		}
+		flooding_requested_from_gama <- false;
+		diking_requested_from_gama <- false;
+		restart_requested_from_gama <- false;	
+		
+		ask world {
+			do divide_resource();
+			do reset_dyke_data();
+		}
+		
+		loop each_player over: unity_player {
+			ask unity_linker{ do get_remaining_resources(each_player.name); }
+		}
+		ask unity_linker { do send_message players: unity_player as list mes: ["main_scene_log" :: main_scene_metrics("round_start")]; }
+		
+		
+	}
+	
+	action enter_flooding {
+//		write "enter_flooding";
+		do enter_flooding_base;
+		
+		
+	}
+	
+	bool flooding_ready {
+		return unity_player all_match each.in_flood;
+	} 
+	
+	// Are all the players who entered ready or has GAMA sent the beginning of the game ? 
+	bool init_over  { 
+		
+		return (current_step > num_step) ;
+	} 
+	
+	bool start_over {
+		if (init_requested_from_gama) {return true;}
+		if (empty(unity_player)) {return false;}
+		
+
+
+		
+		return unity_player all_match each.start_pressed;
+	}
+	
+	
+	bool diking_over { 
+		//write "diking_over: " + sample(diking_over) + " " + sample(gama.machine_time >= current_timeout);
+		
+		return  diking_over or gama.machine_time >= current_timeout;
+	}
+	
+	// Are all the players in the not_ready state or has GAMA sent the end of the game ?
+	bool flooding_over  { 
+		if (current_step > num_step) {return true;} 
+	}	
+	 
+	
+	/*************************************************************
+	 * Record and playback the initial state
+	 *************************************************************/
+	 
+	
+	/*************************************************************
+	 * Flags to control the phases in the simulations
+	 *************************************************************/
+
+	// Is a restart requested by the user ? 
+	bool restart_requested_from_gama;
+	
+	// Is the flooding stage requested by the user ? 
+	bool flooding_requested_from_gama;
+	
+	// Is the initial flooding stage requested by the user ? 
+	bool init_requested_from_gama;
+	
+	// Is the diking stage requested by the user ? 
+	bool diking_requested_from_gama; 
+
+	action divide_resource {
+		int player_cnt <- length(unity_player);
+		loop each_player over: unity_player {
+			
+			player_resources[each_player.name] <- original_resource / player_cnt;
+		}
+	}
+	
+	action reset_dyke_data {
+		player_built_dykes <- [];
+		dykes_built_by_players <- [];
+	}
+}
+
+species unity_linker parent: abstract_unity_linker { 
+	string player_species <- string(unity_player);
+	int max_num_players  <- -1;
+	int min_num_players  <- -1;
+	list<point> init_locations <- define_init_locations();
+	unity_property up_people;
+	unity_property up_dyke;
+	unity_property up_dam;
+	unity_property up_water;
+	unity_property up_shelter;
+	unity_property up_building;
+//	unity_property up_player;
+//	unity_property up_injuries;
+	
+	
+	unity_property up_frontier_green;
+	unity_property up_frontier_orange;
+	unity_property up_frontier_red;
+	bool do_send_world <- true;
+	
+	map<string, dyke> dykes;
+	init {
+		
+		unity_aspect people_aspect <- prefab_aspect("Prefabs/People/FleeingMan",1,0,1.0,0, precision);
+		unity_aspect dyke_aspect <- prefab_aspect("Prefabs/Blocks/DikeBlock", 1.5, 0.0, 1.0, 0.0, precision);
+		unity_aspect dam_aspect <- prefab_aspect("Prefabs/Blocks/DamBlock", 1.5, 0.0, 1.0, 0.0, precision);
+		unity_aspect water_aspect <- geometry_aspect(7.0, "Materials/Water/M_RiverGenerated",precision);
+		unity_aspect shelter_aspect <- prefab_aspect("Prefabs/Shelter/Shelter",150,0,1.0,0.0, precision);
+		unity_aspect building_aspect <- geometry_aspect(5.0, "Materials/KeyMaterial",precision);
+//		unity_aspect player_aspect <- prefab_aspect("Prefabs/Players/Player", 90, 1000, 1.0, 0.0, precision);
+		
+		up_people<- geometry_properties("people", "people", people_aspect, #no_interaction, false);
+		up_dyke <- geometry_properties("dyke", "dyke", dyke_aspect, #ray_interactable, false);
+		up_dam <- geometry_properties("dam", "dam", dam_aspect, #ray_interactable, false);
+		up_water <- geometry_properties("water", string(nil), water_aspect, #no_interaction,false);
+		up_shelter <- geometry_properties("shelter", string(nil), shelter_aspect,#no_interaction,false);
+		up_building <- geometry_properties("buidling", string(nil), building_aspect,#no_interaction, false);
+//		up_player <- geometry_properties("player", "player", player_aspect, #no_interaction, false);
+		
+		unity_aspect frontier_green_aspect <- geometry_aspect(50.0, #green,  precision);
+		unity_aspect frontier_orange_aspect <- geometry_aspect(50.0, #orange,  precision);
+		unity_aspect frontier_red_aspect <- geometry_aspect(50.0, #red,  precision);
+	
+		up_frontier_green<- geometry_properties("frontier_green", string(nil), frontier_green_aspect, #no_interaction, false);
+		up_frontier_orange<- geometry_properties("frontier_orange", string(nil), frontier_orange_aspect, #no_interaction, false);
+		up_frontier_red<- geometry_properties("frontier_red", string(nil), frontier_red_aspect, #no_interaction, false);
+	
+		
+		unity_properties << up_frontier_green;
+		unity_properties << up_frontier_orange;
+		unity_properties << up_frontier_red;
+
+		unity_properties << up_people;
+		unity_properties << up_dyke;
+		unity_properties << up_dam;
+		unity_properties << up_water;
+		unity_properties << up_shelter;
+		unity_properties << up_building;
+//		unity_properties << up_player;
+		
+		//add the static_geometry agents as static agents/geometries to send to unity with the up_geom unity properties.
+		do add_background_geometries(evacuation_point,up_shelter);
+	
+		//do add_background_geometries(water_limit_drain collect (each + 20),up_frontier_green);
+		list<geometry> water_limit_well_ts;
+		geometry ir <- init_river + 100;
+		loop  wl over: water_limit_well {
+			if (ir overlaps wl) {
+				water_limit_well_ts <- water_limit_well_ts + (wl - ir).geometries where ((each != nil) and (each.perimeter > 100));
+			} else if (wl != nil){
+				water_limit_well_ts << wl;
+			}
+		}
+//		do add_background_geometries(water_limit_well_ts collect (each + 20),up_frontier_orange);
+//		do add_background_geometries(water_limit_danger collect (each + 20),up_frontier_red);
+//		do add_background_geometries(water_limit_drain collect (each + 20), up_frontier_green);
+//	
+//		do add_background_geometries(buildings, up_building );
+	}
+	
+	action end_diking(string player_id) {
+		diking_over <- true;
+	}
+
+	action sendEndGame { 	
+		do send_message players: unity_player as list mes: ["score":: round(score), "endgame"::current_round >= num_rounds];
+	}
+	
+	action get_remaining_resources(string player_id) {
+		float remaining_resources <- player_resources[player_id];
+		do send_message players: unity_player as list mes: ["player_id" :: player_id, "remaining_resources" :: remaining_resources];
+	}
+	
+	// Authoritative main-scene logging, separate from tutorial measurements.
+	string main_scene_stage <- "world_state";
+	int main_scene_event_counter <- 0;
+
+	map main_scene_barrier_record(dyke barrier) {
+		point a <- barrier.main_scene_log_start;
+		point b <- barrier.main_scene_log_end;
+		return ["gama_name" :: barrier.name,
+			"structure_type" :: (barrier.is_dam ? "dam" : "dyke"),
+			"player_id" :: (dykes_built_by_players[barrier.name] = nil ? "Unknown" : dykes_built_by_players[barrier.name]),
+			"length_m" :: barrier.length,
+			"remaining_length_m" :: (barrier.length * barrier.cell_percentage),
+			"start_gama" :: [a.x, a.y, a.z], "end_gama" :: [b.x, b.y, b.z],
+			"drowned" :: barrier.drowned];
+	}
+
+	map main_scene_metrics(string event_type) {
+		main_scene_event_counter <- main_scene_event_counter + 1;
+		return ["schema_version" :: 1,
+			"event_id" :: string(main_scene_event_counter),
+			"event_type" :: event_type, "round" :: world.current_round,
+			"state" :: world.state, "current_step" :: world.current_step,
+			"num_step" :: world.num_step, "gama_machine_time_ms" :: gama.machine_time,
+			"dyke_length" :: world.dyke_length, "dam_length" :: world.dam_length,
+			"evacuated" :: world.evacuated, "casualties" :: world.casualties,
+			"score" :: world.score,
+			"barriers" :: (dyke collect main_scene_barrier_record(each))];
+	}
+
+	action send_main_scene_snapshot(string stage) {
+		if (not empty(unity_player)) {
+			main_scene_stage <- stage;
+			do queue_main_scene_geometries;
+			do send_world;
+			main_scene_stage <- "world_state";
+		}
+	}
+
+	action add_to_send_world(map map_to_send) {
+		map_to_send["main_scene_log"] <- main_scene_metrics(main_scene_stage);
+		map_to_send["remaining_time"] <- max(0, int((current_timeout - gama.machine_time)/1000));
+		map_to_send["state"] <- world.state;
+		map_to_send["score"] <- round(world.score);
+		map_to_send["casualties"] <- world.casualties;
+		//map_to_send["winning"] <- winning;
+	//	map_to_send["playback_finished"] <- playback_finished;
+		map_to_send["num_step"] <- world.num_step;
+		map_to_send["current_step"] <- world.current_step;
+		map_to_send["ready_to_build_dyke"] <- ready_to_build_dyke;
+		
+		//write sample(world.state) + " " + sample(playback_finished);
+	} 
+	list<point> define_init_locations {
+		return [world.location + {0,0,1000},
+				world.location + {100,0,1000}];
+	} 
+
+	list<float> convert_string_to_array_of_float(string my_string) {
+    	return (my_string split_with ",") collect float(each);
+	}
+	
+
+	
+	action action_management_with_unity(string player_id, string unity_start_point, string unity_end_point) {
+		list<float> unity_start_point_float <- convert_string_to_array_of_float(unity_start_point);
+		list<float> unity_end_point_float <- convert_string_to_array_of_float(unity_end_point);
+		point converted_start_point <- {unity_start_point_float[0], unity_start_point_float[1], unity_start_point_float[2]};
+		point converted_end_point <- {unity_end_point_float[0], unity_end_point_float[1], unity_end_point_float[2]};
+		
+		
+		
+		//create dyke with: (shape: line([converted_start_point, converted_end_point])) ;
+		list<dyke> created_dykes <- world.create_dyke(converted_start_point, converted_end_point);
+		bool is_ok <- not empty(created_dykes);
+		do send_message players: unity_player as list mes: ["ok_build_dyke_with_unity " + converted_start_point + "   " + converted_end_point :: is_ok];
+
+		loop each_dyke over: created_dykes {
+			player_resources[player_id] <- player_resources[player_id] - each_dyke.length;
+			if (player_built_dykes[player_id] = nil) {
+				player_built_dykes[player_id] <- [];
+			}
+			player_built_dykes[player_id] << each_dyke.name;
+			dykes_built_by_players[each_dyke.name] <-player_id;
+			map study_event <- main_scene_metrics("barrier_built");
+			study_event["player_id"] <- player_id;
+			study_event["success"] <- true;
+			study_event["barrier"] <- main_scene_barrier_record(each_dyke);
+			study_event["request_start_gama"] <- [converted_start_point.x, converted_start_point.y, converted_start_point.z];
+			study_event["request_end_gama"] <- [converted_end_point.x, converted_end_point.y, converted_end_point.z];
+			do send_message players: unity_player as list mes: ["main_scene_log" :: study_event];
+		}
+		ask experiment {
+			do update_outputs(true);  
+		}
+	}
+ 
+	action destroy_dyke_with_unity(string player_id, string id) {
+		dyke study_target <- dyke first_with (each.name = id);
+		map study_barrier <- study_target = nil ? nil : main_scene_barrier_record(study_target);
+		//if (player_built_dykes[player_id] != nil and player_built_dykes[player_id] contains id) {
+			float possible_length <- world.destroy_dyke(id);
+			string builder <- dykes_built_by_players[id];
+			player_resources[builder] <- player_resources[builder] + possible_length;
+			player_built_dykes[builder] >> id;
+			map study_event <- main_scene_metrics("barrier_destroyed");
+			study_event["player_id"] <- player_id;
+			study_event["success"] <- study_barrier != nil and possible_length > 0;
+			study_event["barrier"] <- study_barrier;
+			do send_message players: unity_player as list mes: ["main_scene_log" :: study_event];
+		//}
+		
+	}
+	
+	action mark_diking_over
+	{
+		diking_over <- true;
+	}
+	 
+	
+	/**
+	 * Send dynamic geometries when it is necessary. 
+	 */
+	 
+	 action send_static_geometries {
+		do add_geometries_to_send(river,up_water);
+	 }
+
+
+	action add_people {
+//		list<people> fleeing_p <- people where (each.state = "s_fleeing");
+//		ask fleeing_p {
+//			name <- "fleeing_" + (int(self) mod 1000);
+//		}
+//		list<people> injured_p <- people where (each.state = "s_drowned");
+//		ask injured_p {
+//			name <- "injury_" + (int(self) mod 1000);
+//		}
+//		do add_geometries_to_send(fleeing_p,up_people);
+//		do add_geometries_to_send(injured_p,up_injuries);
+		
+		list<people> affected_p <- people where (each.state = "s_fleeing" or each.state = "s_drowned");
+		list<int> status <- affected_p collect (each.state = "s_drowned" ? -1 : 1);
+		map<string, list<int>> people_atts <- ["status"::status];
+		do add_geometries_to_send(affected_p, up_people, people_atts);
+	}
+	/**+
+	 * What are the agents to send to Unity, and what are the agents that remain unchanged ? 
+	 */
+	reflex send_agents when: not empty(unity_player) {
+		do queue_main_scene_geometries;
+	}
+
+	action queue_main_scene_geometries {
+		
+//		do add_geometries_to_send(player_agents, up_player);
+		
+		if (state = "s_init") {
+			do add_people;
+			// We send the river (supposed to change every step)
+			do add_geometries_to_send(river collect each.shape_to_export,up_water);
+			
+		} else if (state = "s_diking") {
+			list<dyke> dykes_ <- (dyke where !each.is_dam);
+			list<float> dykes_length <- dykes_ collect each.length;
+			list<float> dykes_rotation <- dykes_ collect each.rotation; 
+			list<int> dyke_colors <- [];
+			loop each_dyke over: dykes_{
+				dyke_colors << player_assigned_colors[dykes_built_by_players[each_dyke.name]];
+			}
+			map<string, list> dykes_atts <- ["length" :: dykes_length ,"rotation" :: dykes_rotation, "color_id" :: dyke_colors];
+			do add_geometries_to_send(dykes_, up_dyke, dykes_atts);
+			
+			list<dyke> dams_ <- (dyke where each.is_dam);
+			list<float> dams_length <- dams_ collect each.length;
+			list<float> dams_rotation <- dams_ collect each.rotation;
+			list<int> dam_colors <- [];
+			loop each_dam over: dams_{
+				dam_colors << player_assigned_colors[dykes_built_by_players[each_dam.name]];
+			}
+			map<string, list> dams_atts <- ["length" :: dams_length ,"rotation" :: dams_rotation, "color_id" :: dam_colors];
+			do add_geometries_to_send(dams_, up_dam, dams_atts);
+			
+//			do add_geometries_to_keep(dyke);
+			// The river is not changed so we keep it unchanged
+			if (river_already_sent_in_diking_phase) {do add_geometries_to_keep(river);} 
+			else {do add_geometries_to_send(river collect each.shape_to_export, up_water); river_already_sent_in_diking_phase <- true;}
+			
+		} else	if (state = "s_flooding") {
+			// We only send the people who are evacuating 
+			do add_people;
+			// We send the river (supposed to change every step)
+			do add_geometries_to_send(river collect each.shape_to_export,up_water);
+			// We send only the dykes that are not underwater
+			list<dyke> dykes_ <- (dyke where (!each.is_dam and !each.drowned));
+			list<float> dykes_length <- dykes_ collect (each.length * each.cell_percentage);
+			list<float> dykes_rotation <- dykes_ collect each.rotation; 
+			map<string, list<float>> dykes_atts <- ["length" :: dykes_length ,"rotation" :: dykes_rotation];
+			do add_geometries_to_send(dykes_, up_dyke, dykes_atts);
+			
+			list<dyke> dams_ <- (dyke where (each.is_dam and !each.drowned));
+			list<float> dams_length <- dams_ collect (each.length * each.cell_percentage);
+			list<float> dams_rotation <- dams_ collect each.rotation;
+			map<string, list<float>> dams_atts <- ["length" :: dams_length ,"rotation" :: dams_rotation];
+			do add_geometries_to_send(dams_, up_dam, dams_atts);	 
+		}
+	}
+
+	// Message sent by Unity to inform about the status of a specific player
+	action set_status(string player_id, string status) {
+//		write "NEW STATUS: " + status;
+		unity_player player <- player_agents[player_id];
+//		write "set status: " + sample(player_id) + " " + sample(player) + " " + sample(status);
+		if (player != nil) {
+			ask player {do set_status(status);}
+		}
+	}
+	
+
+ 
+}
+
+species unity_player parent: abstract_unity_player{
+	
+	bool in_tutorial;
+	bool in_flood;
+	bool start_pressed;
+	bool in_dyke_building;
+	rgb color <- #red;
+	init {
+		do set_status(IN_TUTORIAL);
+	}
+	
+	action set_status(string status) {
+		in_tutorial <- status = IN_TUTORIAL;
+		start_pressed <- status = START_PRESSED;
+		in_flood <- status = IN_FLOOD;
+		in_dyke_building <- status = IN_DYKE_BUILDING;
+	}
+} 
+
+
+experiment Launch  autorun: true type: unity {
+
+
+	string unity_linker_species <- string(unity_linker);
+	float minimum_cycle_duration <- cycle_duration;
+	
+	point start_point; 
+	point end_point;  
+	geometry line; 
+	 
+	 
+	 
+	//action called by the middleware when a player connects to the simulation
+	action create_player(string id) {
+		ask unity_linker {
+			do create_player(id);
+		}
+		if (not empty(color_ID)) {
+			int color_to_assign <- first(color_ID);
+			player_assigned_colors[id] <- color_to_assign;
+			color_ID >- color_to_assign;
+		}
+	}
+
+	//action called by the middleware when a plyer is remove from the simulation
+	action remove_player(string id_input) {
+		if (not empty(unity_player)) {
+			ask first(unity_player where (each.name = id_input)) {
+				do die;
+			}
+			if (player_assigned_colors contains_key id_input) {
+				int color_to_return <- player_assigned_colors[id_input];
+				color_ID << color_to_return;
+				player_assigned_colors >- id_input;
+			}
+		}
+	}
+	
+	output { 
+		
+		layout #none controls: false toolbars: false editors: false parameters: false consoles: false tabs: false;
+		display map type: 3d axes: false background: background_color antialias: false{
+			camera 'default' location: {1441.2246,3297.5234,8595.6544} target: {1441.2246,3297.3733,0.0};
+			//	grid cell border: #black;
+		 	species river visible:!river_in_3D{
+				draw shape_to_export border: brighter(brighter(river_color)) width: 5 color: river_color;
+			}	 
+
+			species road {
+				draw drowned ? shape : shape + 10 color: drowned ? darker(river_color) : road_color ;
+			}
+		 	species buildings {
+		 		draw shape color: drowned ? river_color : color border: drowned ? darker(river_color):color;	
+		 	}
+		 	graphics "end_of_world" {
+				loop d over: water_limit_danger {
+					draw d + 20 color: #red;
+				}
+				loop d over: water_limit_well {
+					draw d + 20 color: #orange;
+				}
+				loop d over: water_limit_drain {
+					draw d + 20 color: #green;
+				}
+			}  
+		 	species dyke {
+		 		if (!is_dam) {
+		 			draw shape + 5 color: drowned ? river_color : dyke_color border: drowned ? darker(river_color):#black;	
+		 		} else {
+		 			draw shape + 5 color: drowned ? river_color : dam_color border: drowned ? darker(river_color):#black;	
+		 		}
+		 		
+			}  
+			species people {
+				draw circle(20)  color: (state = "s_drowned" ? people_drowned_color : (state = "s_evacuated" ?  people_evacuated_color : people_color)); 
+			 	
+			}
+			species evacuation_point {
+				draw circle(60) at: location + {0,0,40} color: evacuation_color border: #black;
+			}
+			
+			species unity_player {
+				draw circle(30) at: location + {0, 0, 50} color: rgb(color, 0.5) ;
+			}
+
+			//mesh cell above: 0 triangulation: true smooth: false color: cell collect each.color visible: river_in_3D transparency: 0.5;
+			//species water_particule; 
+			
+			event "r" {
+				if (state != "s_diking") { return;}
+				if (start_point != nil) {
+					start_point <- nil;
+					line <- nil;
+				} else { 
+					ask world {
+						geometry g <- circle(10) at_location #user_location;
+				 		list<dyke> dykes <- dyke overlapping g;
+				 		if (not empty(dykes)) {
+				 			bool recompute_river <- false;
+				 			ask dykes closest_to #user_location {
+				 				if (is_dam) {
+				 					dam_length <- dam_length - length; 
+				 				} else {
+				 					dyke_length <- dyke_length - length; 
+				 				}
+				 				loop c over: cells_under {
+				 					c.obstacles >> self;
+				 					if (c in bed_cells) {
+				 						recompute_river <- true;
+				 						c.water_height <- initial_water_height;
+				 					}
+				 				}
+				 				do die;
+				 			}
+				 			if (recompute_river) {
+				 				do compute_river_shape;
+				 			}
+				 			
+				 		}
+					}
+					 
+				}
+				
+			}  
+			event #mouse_down {
+				
+				if (check_selected) {
+					keep_dykes <- !keep_dykes;
+				}
+				if (state != "s_diking") { return;}
+				if (start_point = nil) {
+		 			start_point <- #user_location; 
+					line <- line([start_point, #user_location]);
+				} else {
+					ask simulation {
+						do create_dyke(myself.start_point, #user_location);
+					}
+					start_point <- nil;
+				 	end_point <- nil;
+				}
+
+			}
+			
+			event "x"
+			{
+				if(state != "s_diking")
+				{
+					current_step <- num_step;
+				}
+			}
+			
+			graphics "Arrow" {
+				draw image_file("../../includes/icons/arrow-23645_1280.png") size: 400 rotate: -90 at: {location.x/1.75, location.y *2 - 200};
+
+			}
+			
+			
+			graphics "General information" {
+				int offset <- 0;
+				draw rectangle(3500,1000) color: #gray border: #black at: {5000, 700+offset, -1.0};
+				draw "General information" font: font ("Helvetica", 22, #bold) at: {3400, 300+offset} anchor: #top_left color: text_color;	
+				
+				
+				draw "Round: " + current_round+"/" + num_rounds font: font ("Helvetica", 18, #bold) at: {3400, 600+offset} anchor: #top_left color: text_color;
+				
+				if  current_round > 1 {
+					draw "best score: " +  round(best_score) font: font ("Helvetica", 18, #bold) at: {3400, 900+offset} anchor: #top_left color: text_color;
+				
+				}	
+				
+			}
+			graphics "Hints" {
+				if current_round = num_rounds {
+					int offset <- 1500;
+					draw rectangle(3500,1200) + 50 color: #lightgreen border: #black at: {5000, 800+offset, -2.0};
+					draw rectangle(3500,1200) color: #gray border: #black at: {5000, 800+offset, -1.0};
+					
+					draw "Hint" font: font ("Helvetica", 22, #bold) at: {3400, 300+offset} anchor: #top_left color: #lightgreen;	
+					string hint <- "One strategy to combat flooding is the developmentof flood\n\nexpansion zones. This involves designating an area where\n\nfloodwaters from a watercourse can spread quickly with minimal\n\nrisk to people and property";
+					
+					
+					draw hint font: font ("Helvetica", 14, #bold) at: {3400, 600+offset} anchor: #top_left color: text_color;
+					
+				}				
+			}
+			
+			
+			
+			
+			graphics "Legend" {
+				int offset <- 500;
+				draw rectangle(3500,2500) color: #gray border: #black at: {-1870, 2650+offset, -1.0};
+				draw "Legend" font: font ("Helvetica", 22, #bold) at: {-3500, 1500+offset} anchor: #top_left color: text_color;	
+				
+				draw  image_file("../../includes/icons/arrow-23645_1280.png") size: 180 rotate: -90  border: #black at: {-3450, 1850+offset};
+				draw "Direction of river flow" font: font ("Helvetica", 14, #bold) at: {-3300, 1800+offset} anchor: #top_left color: text_color;	
+				
+				draw line([{-3500, 2100+offset},{-3400, 2100+offset}]) + 20 color: #green ;
+				draw "Drain-type border (water run-off)" font: font ("Helvetica", 14, #bold) at: {-3300, 2060+offset} anchor: #top_left color: text_color;	
+				draw line([{-3500, 2300+offset},{-3400, 2300+offset}]) + 20 color: #orange ;
+				
+				draw "Well-type border (prevents water run-off)" font: font ("Helvetica", 14, #bold) at: {-3300, 2260+offset} anchor: #top_left color: text_color;	
+				
+				draw line([{-3500, 2500+offset},{-3400, 2500+offset}]) + 20 color: #red ;
+				draw "Stake-type border (prevents water run-off and leads to point loss)" font: font ("Helvetica", 14, #bold) at: {-3300, 2460+offset} anchor: #top_left color: text_color;	
+				
+				
+				draw line([{-3500, 2800+offset},{-3400, 2800+offset}]) + 20 color: dyke_color border: #black;
+				draw "Dyke - price : 1 point / meter" font: font ("Helvetica", 14, #bold) at: {-3300, 2760+offset} anchor: #top_left color: text_color;	
+				draw line([{-3500, 3000+offset},{-3400, 3000+offset}]) + 20 color: dam_color border: #black;
+				draw "Dam - price : 10 points / meter" font: font ("Helvetica", 14, #bold) at: {-3300, 2960+offset} anchor: #top_left color: text_color;	
+				
+				draw circle(30)  color: people_color at:  {-3450, 3300+offset} ; 
+				draw "People evacuating" font: font ("Helvetica", 14, #bold) at: {-3300, 3260+offset} anchor: #top_left color: text_color;	
+				draw circle(30)  color: people_drowned_color at:  {-3450, 3500+offset} ; 
+				draw "People injured" font: font ("Helvetica", 14, #bold) at: {-3300, 3460+offset} anchor: #top_left color: text_color;	
+				
+				draw circle(60)  color: evacuation_color at:  {-3450, 3700+offset} ; 
+				draw "Shelter (evacuation point)" font: font ("Helvetica", 14, #bold) at: {-3300, 3660+offset} anchor: #top_left color: text_color;	
+				
+			
+			}
+			
+			graphics "Text and icon"   {
+					
+				
+				string stage <- nil;
+				string timer <- nil;
+				string hint <- nil;
+				string indicators <- nil;
+				
+				rgb color_indicators <- text_color;
+				stage <- "Waiting for player";	 
+				switch (state) {
+					match "s_init" {
+						stage <-  "Flood without dykes/dams";
+						
+						//\n\n" + "Casualties: " + casualties + '/' + nb_of_people;
+						timer <- "End in " +max(0,(num_step - current_step)) + " minutes";
+						indicators <- "Casualties: " + casualties + '/' + nb_of_people + "\n\nScore: " + round(score);
+						if (score <= 900 and score > 700) or (casualties > 0 and casualties< 10){
+							color_indicators <- #yellow;
+						} else if (score <= 700 and score > 500) or (casualties >= 10 and casualties< 100) {
+							color_indicators <- #orange;
+						} else if (score <= 500) or (casualties > 100)   {
+							color_indicators <- #red;
+						} else {
+							color_indicators <- #lightgreen;
+						}
+						
+						//float left <- current_timeout - gama.machine_time;
+						//timer <- button_selected ? "Restart now.": "Restarting in " + int(left / 1000) + " seconds.";
+						//\nPress 'r' to restart immediately.";
+						//keep <- "Keep the dykes."; 
+					}
+					match "s_diking" {
+						stage <-  "Build dykes/dams";
+						indicators <- "Meters of dyke built: "+ round(dyke_length) + "m" + "\n\nMeters of dam built: "+ round(dam_length) + "m";
+					
+						//text <- "Build dykes/dams with the mouse.\n\n\tMeters of dyke built: "+ round(dyke_length) + "m" + "\n\n\tMeters of dam built: "+ round(dam_length) + "m";
+						float left <- current_timeout - gama.machine_time;
+						timer <- button_selected ? "Start flooding now.": "Flooding in " + max(0,int(left / 1000)) + " seconds.";
+						hint <- "Press 'r' to remove a dyke/dam\nPress 'f' for skipping.";
+						
+						//\nPress 'f' to start immediately.";
+					}	
+					match "s_flooding" {
+						 
+						stage <-  "Flood";
+						indicators <- "Casualties: " + casualties + '/' + nb_of_people + "\n\nScore: " + round(score);
+						
+						//text <- "Casualties: " + casualties + '/' + nb_of_people;
+						float left <- current_timeout - gama.machine_time;
+						//hint <- "Press 'r' for restarting.";
+						timer <- "End in " +max(0,(num_step - current_step)) + " minutes";
+						
+						if (score <= 900 and score > 700) or (casualties > 0 and casualties< 10){
+							color_indicators <- #yellow;
+						} else if (score <= 700 and score > 500) or (casualties >= 10 and casualties< 100) {
+							color_indicators <- #orange;
+						} else if (score <= 500) or (casualties > 100)   {
+							color_indicators <- #red;
+						}else {
+							color_indicators <- #lightgreen;
+						}
+						//\nPress 'r' to restart immediately.";
+						//keep <- "Keep the dykes."; 
+					}
+					
+				}
+ 
+				draw rectangle(3500,1600) color: #gray border: #black at: {-1870, 1000,-1.0};
+				draw "Current stage: " + stage font: font ("Helvetica", 22, #bold) at: {-3500, 300} anchor: #top_left color: text_color;
+					
+				int line_offset <- 0;
+				loop each_player over: unity_player {
+				    draw each_player.name + " " + "remaining resouce: " + round(player_resources[each_player.name]) font: font ("Helvetica", 18, #bold) at: {-4000, 5000 - line_offset} anchor: #top_left color: text_color;
+				    line_offset <- line_offset + 100;
+				}
+				
+				//draw background color: darker(frame_color) width: 5 border: brighter(frame_color) at: background_position + {background.width / 2, background.height/2, -10} lighted: false ;
+				point timer_position_ <- {-3300, 600};
+				point indicators_position <- {-3300, 1000};
+	
+				if (timer != nil) { 
+					draw timer font: font ("Helvetica", 18, #bold) at: timer_position_ anchor: #top_left color: text_color;	
+				}
+				if (indicators != nil) { 
+					draw indicators font: font ("Helvetica", 18, #bold) at: indicators_position anchor: #top_left color: color_indicators;	
+				}
+				/*if (keep != nil) {
+					draw keep font: font ("Helvetica", 16, #plain) at: check_text_position anchor: #top_left color: text_color;	
+				}
+				if (hint != nil) {
+					draw hint font: font ("Helvetica", 14, #bold) at: text_position + {0, 630} anchor: #top_left color: text_color;	
+				}	*/	
+				
+				
+		
+			}
+			
+		
+			
+			event "f" {
+				if (state != "s_diking") {return;}
+				diking_over <- true;
+			}
+		
+			
+			event #mouse_move { 
+				if (state != "s_diking") {line <- nil; return;}
+				if (start_point != nil) {
+					line <- line([start_point, #user_location]);
+					is_ok_dyke_construction <- true;
+				} else {
+					line <- nil;
+				}
+			}
+			
+				 		
+			graphics ll {
+				if (line != nil) {
+					draw line + dyke_width + 5 color: is_ok_dyke_construction ? dyke_color : #red border: #black;
+				}
+			}
+		}
+
+	}
+
+}

@@ -29,6 +29,8 @@ public class WorldJSONInfo
     public int casualties;
     public int num_step, current_step;
     public bool ready_to_build_dyke;
+    // Optional main-scene telemetry. Older GAMA models leave this null.
+    public MainSceneTelemetry main_scene_log;
 
     public static WorldJSONInfo CreateFromJSON(string jsonString)
     {

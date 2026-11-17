@@ -65,6 +65,7 @@ public class SimulationManager : MonoBehaviour
     protected ConnectionParameter parameters = null;
     protected AllProperties propertiesGAMA = null;
     protected WorldJSONInfo infoWorld = null;
+    MainSceneFloodLogger mainSceneLogger;
     protected AnimationInfo infoAnimation = null;
     protected GameState currentState;
 
@@ -163,6 +164,12 @@ public class SimulationManager : MonoBehaviour
                     : ("\"" + ConnectionManager.Instance.GetConnectionId() + "\"")
             }
         };
+        // The tutorial owns a separate logger and must keep its existing flow.
+        if (gameObject.scene.name == MainSceneFloodLogger.SceneName)
+        {
+            mainSceneLogger = gameObject.AddComponent<MainSceneFloodLogger>();
+            mainSceneLogger.Initialize();
+        }
     }
 
     void StartTheFlood()
@@ -217,12 +224,14 @@ public class SimulationManager : MonoBehaviour
         handleGroundParametersRequested = false;
         infoWorld = null;
         //interactionManager = player.GetComponentInChildren<XRInteractionManager>();
-        OnEnable();
+        if (mainSceneLogger == null) OnEnable();
     }
 
 
     void FixedUpdate()
     {
+        if (mainSceneLogger != null && infoWorld == null && mainSceneLogger.TryTakeWorld(out WorldJSONInfo pending))
+            infoWorld = pending;
         if (sendMessageToReactivatePositionSent)
         {
             ConnectionManager.Instance.SendExecutableAsk("player_position_updated", connectionID);
@@ -237,8 +246,10 @@ public class SimulationManager : MonoBehaviour
 
         if (handleGeometriesRequested && infoWorld != null && infoWorld.isInit)
         {
+            WorldJSONInfo applied = infoWorld;
             sendMessageToReactivatePositionSent = true;
             GenerateGeometries(true, null);
+            if (mainSceneLogger != null) mainSceneLogger.WorldApplied(applied);
             handleGeometriesRequested = false;
             UpdateGameState(GameState.GAME);
         }
@@ -264,7 +275,12 @@ public class SimulationManager : MonoBehaviour
             if (readyToSendPosition && TimerSendPosition <= 0.0f)
                 UpdatePlayerPosition();
             if (infoWorld != null && !infoWorld.isInit)
+            {
+                // Apply the state while this packet is still available;
+                // GenerateGeometries clears infoWorld after consuming it.
+                if (mainSceneLogger != null) UpdateGame();
                 UpdateAgentsList();
+            }
         }
     }
 
@@ -792,6 +808,7 @@ public class SimulationManager : MonoBehaviour
 
     private void UpdateAgentsList()
     {
+        WorldJSONInfo applied = infoWorld;
         ManageOtherInformation();
         toRemove.Clear();
         toRemove.UnionWith(geometryMap.Keys);
@@ -820,7 +837,9 @@ public class SimulationManager : MonoBehaviour
             }
         }
 
-        //infoWorld = null;
+        // Capture terminal packets before applying the next round/reset.
+        // Old water objects have already been removed from the rendered map.
+        if (mainSceneLogger != null) mainSceneLogger.WorldApplied(applied);
     }
 
     protected virtual void ManageAttributes(List<Attributes> attributes)
@@ -923,6 +942,7 @@ public class SimulationManager : MonoBehaviour
     private void HandleServerMessageReceived(string firstKey, string content)
     {
         if (content == null || content.Equals("{}")) return;
+        if (mainSceneLogger != null && mainSceneLogger.TryHandleMessage(content)) return;
         if (firstKey == null)
         {
             if (content.Contains("pong"))
