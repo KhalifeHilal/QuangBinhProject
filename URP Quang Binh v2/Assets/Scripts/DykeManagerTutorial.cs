@@ -235,14 +235,14 @@ public class DykeManagerTutorial : MonoBehaviour
         {
             placementMarker = GameObject.CreatePrimitive(PrimitiveType.Sphere);
             placementMarker.name = "A1P1_Dyke_Placement_Point";
-            placementMarker.transform.localScale = Vector3.one * .18f;
+            placementMarker.transform.localScale = Vector3.one * .12f;
             Collider markerCollider = placementMarker.GetComponent<Collider>();
             if (markerCollider != null) markerCollider.enabled = false;
             Renderer markerRenderer = placementMarker.GetComponent<Renderer>();
             Shader shader = Shader.Find("Universal Render Pipeline/Unlit");
             if (shader == null) shader = Shader.Find("Sprites/Default");
             Material markerMaterial = new Material(shader) { name = "Virtual Hands Terrain Cursor Material" };
-            Color markerColor = new Color(.1f, .8f, 1f, 1f);
+            Color markerColor = new Color(.05f, 1f, .25f, 1f);
             if (markerMaterial.HasProperty("_BaseColor")) markerMaterial.SetColor("_BaseColor", markerColor);
             if (markerMaterial.HasProperty("_Color")) markerMaterial.SetColor("_Color", markerColor);
             markerMaterial.renderQueue = 3000;
