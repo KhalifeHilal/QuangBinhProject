@@ -88,7 +88,10 @@ public sealed class GamepadInteractionController : MonoBehaviour
     void LateUpdate()
     {
         if (gamepadModeActive)
+        {
             GamepadUIInput.RefreshTutorialInstructions();
+            GamepadUIInput.MaintainSelectionFocus();
+        }
     }
 
     void EnableGamepadMode()
@@ -311,5 +314,6 @@ public sealed class GamepadInteractionController : MonoBehaviour
 
         gamepadModeActive = false;
         ParticipantInput.SetGamepadModeEnabled(false);
+        GamepadUIInput.ResetSelection();
     }
 }

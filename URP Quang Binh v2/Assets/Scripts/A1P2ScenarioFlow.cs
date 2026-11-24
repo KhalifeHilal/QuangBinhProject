@@ -41,7 +41,7 @@ public sealed class A1P2ScenarioFlow : MonoBehaviour
         floodPrefab = prefab; viewingDuration = previewSeconds; floodDuration = simulationSeconds;
         questA ??= new InputAction("A1-P2 Continue", InputActionType.Button, "<XRController>{RightHand}/primaryButton");
         questA.Enable();
-        prompt = P2Panel.CreateStartPrompt();
+        prompt = P2Panel.CreateStartPrompt(StartPreview);
         phase = Phase.WaitingForA;
     }
 
@@ -53,7 +53,9 @@ public sealed class A1P2ScenarioFlow : MonoBehaviour
 
     void Update()
     {
-        if (phase == Phase.WaitingForA && ParticipantInput.StartWasPressedThisFrame(questA)) StartPreview();
+        // Gamepad A submits the focused start button; do not poll it twice.
+        if (phase == Phase.WaitingForA && !ParticipantInput.IsGamepadParticipant &&
+            ParticipantInput.StartWasPressedThisFrame(questA)) StartPreview();
         if (phase == Phase.BuildingDykes && !ParticipantInput.IsVirtualHandsParticipant &&
             ParticipantInput.SimulationStartWasPressedThisFrame(questA)) StartFlood();
         if (phase != Phase.Preview && phase != Phase.Flood) return;
@@ -251,14 +253,12 @@ static class P2Panel
     static string[] CurrentAnswers => UseB ? AnswersB : AnswersA;
     static int CorrectAnswerIndex => UseB ? 1 : 3;
 
-    public static GameObject CreateStartPrompt()
+    public static GameObject CreateStartPrompt(Action onStart)
     {
         GameObject root = CanvasRoot("A1_P2_Start", new Vector2(950, 350));
         FloodLearningUI.Text("Title", root.transform, "A1 - P2", 40, FontStyles.Bold, -35, 55, TextAlignmentOptions.Center, 40);
         FloodLearningUI.Text("Topic", root.transform, "Topography", 45, FontStyles.Bold, -110, 65, TextAlignmentOptions.Center, 40);
-        string continueText = ParticipantInput.IsGamepadParticipant ? "Press B to continue" :
-            ParticipantInput.IsVirtualHandsParticipant ? "Pinch to continue" : "Press A to continue";
-        FloodLearningUI.Text("Continue", root.transform, continueText, 35, FontStyles.Normal, -220, 55, TextAlignmentOptions.Center, 40).color = new Color(.3f, .8f, 1f);
+        FloodScenarioContinuePrompt.AddStartControl(root.transform, onStart, -220);
         FloodLearningUI.PlaceInFrontOfPlayer(root.transform, 2.1f); return root;
     }
     public static GameObject CreatePreviewHint()
@@ -722,7 +722,13 @@ static class GeneralDiscomfortSurvey
 
     static void Close()
     {
-        if (panel != null) UnityEngine.Object.Destroy(panel);
+        if (panel != null)
+        {
+            // Destroy is deferred: remove the survey's controls immediately
+            // so Gamepad focus can transfer to the next scenario's A button.
+            panel.SetActive(false);
+            UnityEngine.Object.Destroy(panel);
+        }
         panel = null;
     }
 }
